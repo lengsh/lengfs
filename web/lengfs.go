@@ -23,25 +23,30 @@ import (
 func lfs_router_register() {
 	PthSep := string(os.PathSeparator)
 	lengfs := PthSep + lfs.LNode.Pnode + PthSep //  "/lengfs/"
-	if len(utils.ServerConfig.WebDir) < 1 {
-		utils.ServerConfig.WebDir = "." + PthSep
-	}
+
 	lengfs_Local_dir := ""
-	if strings.HasSuffix(utils.ServerConfig.WebDir, PthSep) {
-		lengfs_Local_dir = utils.ServerConfig.WebDir
+	if strings.HasPrefix(lfs.LNode.Parent, PthSep) {
+		lengfs_Local_dir = lfs.LNode.Parent
 	} else {
-		lengfs_Local_dir = utils.ServerConfig.WebDir + PthSep
-	}
+		if len(utils.ServerConfig.WebDir) < 1 {
+			utils.ServerConfig.WebDir = "." + PthSep
+		}
+		if strings.HasSuffix(utils.ServerConfig.WebDir, PthSep) {
+			lengfs_Local_dir = utils.ServerConfig.WebDir
+		} else {
+			lengfs_Local_dir = utils.ServerConfig.WebDir + PthSep
+		}
 
-	logs.Debug("1: fs dir:", lengfs_Local_dir)
+		logs.Debug("1: fs dir:", lengfs_Local_dir)
 
-	if strings.HasPrefix(lfs.LNode.Parent, ".") {
-		lengfs_Local_dir = lengfs_Local_dir + strings.Replace(lfs.LNode.Parent, "./", "", 1) //   "./static/lengfs/"
-		logs.Debug(lfs.LNode.Parent, "\n", lengfs_Local_dir)
-	} else {
-		lengfs_Local_dir = lengfs_Local_dir + lfs.LNode.Parent //   "./static/lengfs/"
+		if strings.HasPrefix(lfs.LNode.Parent, ".") {
+			lengfs_Local_dir = lengfs_Local_dir + strings.Replace(lfs.LNode.Parent, "./", "", 1) //   "./static/lengfs/"
+			logs.Debug(lfs.LNode.Parent, "\n", lengfs_Local_dir)
+		} else {
+			lengfs_Local_dir = lengfs_Local_dir + lfs.LNode.Parent //   "./static/lengfs/"
+		}
+		logs.Debug("2: fs dir:", lengfs_Local_dir)
 	}
-	logs.Debug("2: fs dir:", lengfs_Local_dir)
 	lengfs_Local_dir += lengfs
 	logs.Debug("3: fs dir:", lengfs_Local_dir)
 	http.Handle(lengfs, http.StripPrefix(lengfs, http.FileServer(http.Dir(lengfs_Local_dir))))

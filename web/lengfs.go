@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/astaxie/beego/logs"
-	"github.com/lengsh/lengfs/lfs"
 	"github.com/lengsh/findme/user"
 	"github.com/lengsh/findme/utils"
+	"github.com/lengsh/lengfs/lfs"
 	"html/template"
 	"net/http"
 	"os"
@@ -26,7 +26,24 @@ func lfs_router_register() {
 	if len(utils.ServerConfig.WebDir) < 1 {
 		utils.ServerConfig.WebDir = "." + PthSep
 	}
-	lengfs_Local_dir := utils.ServerConfig.WebDir + PthSep + lfs.LNode.Parent + lengfs //   "./static/lengfs/"
+	lengfs_Local_dir := ""
+	if strings.HasSuffix(utils.ServerConfig.WebDir, PthSep) {
+		lengfs_Local_dir = utils.ServerConfig.WebDir
+	} else {
+		lengfs_Local_dir = utils.ServerConfig.WebDir + PthSep
+	}
+
+	logs.Debug("1: fs dir:", lengfs_Local_dir)
+
+	if strings.HasPrefix(lfs.LNode.Parent, ".") {
+		lengfs_Local_dir = lengfs_Local_dir + strings.Replace(lfs.LNode.Parent, "./", "", 1) //   "./static/lengfs/"
+		logs.Debug(lfs.LNode.Parent, "\n", lengfs_Local_dir)
+	} else {
+		lengfs_Local_dir = lengfs_Local_dir + lfs.LNode.Parent //   "./static/lengfs/"
+	}
+	logs.Debug("2: fs dir:", lengfs_Local_dir)
+	lengfs_Local_dir += lengfs
+	logs.Debug("3: fs dir:", lengfs_Local_dir)
 	http.Handle(lengfs, http.StripPrefix(lengfs, http.FileServer(http.Dir(lengfs_Local_dir))))
 	/*****
 	  lfs web command
@@ -50,6 +67,11 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	node := lfs.LNode
+	u, _ := user.GetUser(r)
+	if usr, ok := u["user"]; ok {
+		node.Domain = strings.Replace(usr.(string), "@", ".", 10)
+	}
+
 	node.Date = time.Now().Format("20060102")
 
 	fview := ""
@@ -132,6 +154,8 @@ func uploadView(fn string) ([]byte, error) {
 	}
 
 	html += `
+<BR>
+<a href="/lfs/">lengfs Home</a>
 </body>
 </HTML>
  `
@@ -168,6 +192,7 @@ func statView() ([]byte, error) {
   <div align=left>  
      <H1>All lfs's COMMAND:</h1>
         <a href="/lfs/">lengfs</a><BR>
+        <a href="/login">login</a><BR>
         <a href="/lfs/upload/">lfs/upload</a><BR>
         <a href="/lfs/psync/?date=20190430">/lfs/psync/?date=20190430</a><BR>
         <a href="/lfs/pathinfo/?date=20190430&inode=0">/lfs/pathinfo/?date=20190430&inode=0</a><BR>

@@ -24,6 +24,11 @@ func lfs_router_register() {
 	PthSep := string(os.PathSeparator)
 	lengfs := PthSep + lfs.LNode.Pnode + PthSep //  "/lengfs/"
 
+	if !strings.HasPrefix(lfs.LNode.Parent, PthSep) &&  !strings.HasPrefix(lfs.LNode.Parent, ".") {
+err :="lfs.LNode.Parent must be relative or absolute path: begin with '.' or '/', but now it's = " + lfs.LNode.Parent
+	     logs.Error( err)
+	     panic(err)
+	}
 	lengfs_Local_dir := ""
 	if strings.HasPrefix(lfs.LNode.Parent, PthSep) {
 		lengfs_Local_dir = lfs.LNode.Parent

@@ -86,7 +86,7 @@ func upload(w http.ResponseWriter, r *http.Request) {
 
 	fview := ""
 	if r.Method == "POST" {
-		if ok, url := node.UserUploadFile(w, r); ok {
+		if url, ok := node.UserUploadFile(w, r); ok {
 			logs.Debug(url)
 			fview = url
 		} else {

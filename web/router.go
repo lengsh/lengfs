@@ -2,6 +2,7 @@ package web
 
 import (
 	"net/http"
+"github.com/lengsh/findme/user"
 )
 
 func Router() {
@@ -9,6 +10,8 @@ func Router() {
 	lfs_router_register()
 
 	http.HandleFunc("/", lfsStat)
+	http.HandleFunc("/hello/", hello)
 	http.HandleFunc("/login", login)
-
+	http.HandleFunc("/userinfo/", user.JwtAuth(userinfo))
+	http.HandleFunc("/api/userinfo/v1/", user.JwtAuth(userinfo))
 }

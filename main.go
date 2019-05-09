@@ -63,7 +63,7 @@ func runInit() {
 func main() {
 
 	runInit()
- 
+        logs.SetLogFuncCall(true)
         web.Router()
 	//wait := time.Second * 2
 	ctx, cancel := context.WithCancel(context.Background()) // context.WithTimeout(context.Background(), wait)

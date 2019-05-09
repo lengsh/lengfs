@@ -4,14 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-// "github.com/lengsh/findme/user"
-//        "github.com/nilslice/jwt"
-"github.com/astaxie/beego/logs"
-"github.com/lengsh/findme/utils"
-"io"
+	// "github.com/lengsh/findme/user"
+	//        "github.com/nilslice/jwt"
+	"github.com/astaxie/beego/logs"
+	"github.com/lengsh/findme/utils"
+	"io"
 	"io/ioutil"
 	"mime/multipart"
-"net/http"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -19,16 +19,16 @@ import (
 )
 
 const sFILENAMESEPARATOR = "\001\002<BR>"
-const sPostFileNameKey   = "file"
-const sPostFilePathKey   = "source"
-const sSyncFilePathKey   = "date"
-const sSyncFileInodeKey  = "inode"
-const AUTH_SCRUMB_KEY    = ".scrumb"
+const sPostFileNameKey = "file"
+const sPostFilePathKey = "source"
+const sSyncFilePathKey = "date"
+const sSyncFileInodeKey = "inode"
+const AUTH_SCRUMB_KEY = ".scrumb"
 const URL_COMMAND_PEER_UPLOAD = "/lfs/peerupload/"
 const URL_COMMAND_USER_UPLOAD = "/lfs/upload/"
-const URL_COMMAND_PATH_INFO   = "/lfs/pathinfo/"
-const URL_COMMAND_PSYNC       = "/lfs/psync/"
-const URL_COMMAND_DEFAULT     = "/lfs/"
+const URL_COMMAND_PATH_INFO = "/lfs/pathinfo/"
+const URL_COMMAND_PSYNC = "/lfs/psync/"
+const URL_COMMAND_DEFAULT = "/lfs/"
 
 // static/lengfs/Node/Date/domain/filename.xyz
 //    |-----|     |     |    |          |
@@ -37,75 +37,70 @@ const URL_COMMAND_DEFAULT     = "/lfs/"
 //
 
 type Node struct {
-	Parent string    /*    "static"     */
-	Pnode  string    /*    "lengfs"     */
-	Inode  string    /*    "0"          */
-	Date   string    /*    "20190501"   */
-	Domain string    /*    "lengsh"     */
-	Queues string    /*    "localhost:8081;localhost:8080"    */
+	Parent string /*    "static"     */
+	Pnode  string /*    "lengfs"     */
+	Inode  string /*    "0"          */
+	Date   string /*    "20190501"   */
+	Domain string /*    "lengsh"     */
+	Queues string /*    "localhost:8081;localhost:8080"    */
 }
 
 type lfsStat struct {
 	IsRunning bool
-	ModTime        time.Time
-	StartTime      time.Time
+	ModTime   time.Time
+	StartTime time.Time
 	Quantity  int
 	Lock      sync.RWMutex
 }
 
 var LNode = Node{}
-var LfsStat = lfsStat{IsRunning: false, StartTime:time.Now().UTC().Add(8 * time.Hour), Quantity:0 }
+var LfsStat = lfsStat{IsRunning: false, StartTime: time.Now().UTC().Add(8 * time.Hour), Quantity: 0}
 
 func (r Node) String() string {
 	return fmt.Sprintf("Parent=%s, Pnode=%s, Inode=%s, Date=%s, Domain=%s, Queues=%s", r.Parent, r.Pnode, r.Inode, r.Date, r.Domain, r.Queues)
 }
 
-
-func (node Node) UserUploadFile(w http.ResponseWriter, r *http.Request) (bool, string) {
+func (node Node) UserUploadFile(w http.ResponseWriter, r *http.Request) (string, bool) {
 	r.ParseMultipartForm(10 << 20)
-	scrumb := r.FormValue( AUTH_SCRUMB_KEY )
+	scrumb := r.FormValue(AUTH_SCRUMB_KEY)
 	if !utils.CheckScrumb(scrumb) {
 		logs.Debug("No Permiss: scrumb is error!....  ", AUTH_SCRUMB_KEY, " = ", scrumb)
-		return false,""
+		return "", false
 	}
 
-        if ok, fn, url := saveFile2Node(w, r, node); ok {
+	if fn, url, ok := saveFile2Node(w, r, node); ok {
 		go peerSync(fn)
-		return ok, url
+		return url, ok
 	}
-	return false, ""
+	return "", false
 }
-func (node Node) PeerUploadFile(w http.ResponseWriter, r *http.Request) (bool, string, string) {
+
+func (node Node) PeerUploadFile(w http.ResponseWriter, r *http.Request) (string, string, bool) {
 	r.ParseMultipartForm(10 << 20)
 	path := r.FormValue(sPostFilePathKey)
-	
-	scrumb := r.FormValue( AUTH_SCRUMB_KEY )
+
+	scrumb := r.FormValue(AUTH_SCRUMB_KEY)
 	if !utils.CheckScrumb(scrumb) {
 		logs.Debug("No Authorizilaiotn.... ")
-			return false,"",""
-	}
-
-        if len(path) > 0 {
-		logs.Debug(path)
-		if ok, node1 := string2Node(path); ok {
-                        logs.Debug("upload from(client) ", node1.Inode)
-                        return saveFile2Node(w, r, node1)
-		} else {
-			logs.Debug("string2Node error!", path)
-		}
 	} else {
-		logs.Debug("error to get param by ", sPostFilePathKey)
+		if len(path) > 0 {
+			logs.Debug(path)
+			if ok, node1 := string2Node(path); ok {
+				logs.Debug("upload from(client) ", node1.Inode)
+				return saveFile2Node(w, r, node1)
+			}
+		}
 	}
-	return false, "", ""
+	return "", "", false
 }
 
 func (node Node) SyncPathFile(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm() //解析url传递的参数，对于POST则解析响应包的主体（request body）
-        retstr := "Error!"
+	retstr := "Error!"
 	//somethings is wrong! Mybe no Queues ??? " + LNode.Queues
 	fn := r.FormValue(sSyncFilePathKey)
 	if len(fn) > 0 {
-		logs.Debug("SyncPathFile: ", sSyncFilePathKey, " = " ,fn)
+		logs.Debug("SyncPathFile: ", sSyncFilePathKey, " = ", fn)
 		base_format := "20060102"
 		_, err := time.Parse(base_format, fn)
 		if err == nil {
@@ -117,7 +112,7 @@ func (node Node) SyncPathFile(w http.ResponseWriter, r *http.Request) {
 				return
 			} else {
 				retstr = retstr + rete.Error()
-				logs.Debug( "syncByDatePath, return = ",  retstr)
+				logs.Debug("syncByDatePath, return = ", retstr)
 			}
 		} else {
 			retstr = retstr + err.Error()
@@ -134,7 +129,7 @@ func (node Node) SyncPathFile(w http.ResponseWriter, r *http.Request) {
 
 func (node Node) PathInfo(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm() //解析url传递的参数，对于POST则解析响应包的主体（request body）
-//   date=?&inode=?&.scrumb=?
+	//   date=?&inode=?&.scrumb=?
 	fdate := r.FormValue(sSyncFilePathKey)
 	inode := r.FormValue(sSyncFileInodeKey)
 	if len(fdate) <= 1 || len(inode) < 1 {
@@ -142,24 +137,24 @@ func (node Node) PathInfo(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	logs.Debug("PathInfo  date = ", fdate)
-	logs.Debug("PathInfo by inode = ", inode,"; current server's Inode=", LNode.Inode )
+	logs.Debug("PathInfo by inode = ", inode, "; current server's Inode=", LNode.Inode)
 
 	err, rest := getFileByDatePath(inode, fdate)
 	if err != nil {
 		fmt.Println(err)
-	//  w.WriteHeader(http.StatusInternalServerError)
-	//	return
-	      rest = err.Error() 
+		//  w.WriteHeader(http.StatusInternalServerError)
+		//	return
+		rest = err.Error()
 	}
 	logs.Debug(rest)
 	w.Header().Set("Content-Type", "text/html;charset=utf-8")
 	w.Write([]byte(rest))
 }
 
-func saveFile2Node(w http.ResponseWriter, r *http.Request, node Node) (bool, string, string) {
+func saveFile2Node(w http.ResponseWriter, r *http.Request, node Node) (string, string, bool) {
 	// Parse our multipart form, 10 << 20 specifies a maximum
 	// upload of 10 MB files.
-// 	r.ParseMultipartForm(10 << 20)
+	// 	r.ParseMultipartForm(10 << 20)
 	// FormFile returns the first file for the given key `myFile`
 	// it also returns the FileHeader so we can get the Filename,
 	// the Header and the size of the file
@@ -167,7 +162,7 @@ func saveFile2Node(w http.ResponseWriter, r *http.Request, node Node) (bool, str
 	if err != nil {
 		logs.Debug("Error Retrieving the File")
 		logs.Debug(err)
-		return false, "", ""
+		return "", "", false
 	}
 	defer file.Close()
 	logs.Debug("Uploaded File: ", handler.Filename)
@@ -179,45 +174,45 @@ func saveFile2Node(w http.ResponseWriter, r *http.Request, node Node) (bool, str
 	tpath, err := getCurrentPath(node)
 	if err != nil {
 		logs.Debug(err)
-		return false, "", ""
+		return "", "", false
 	}
 
 	outPath := tpath + "/" + handler.Filename
 
-	if ok, _ := isExists(outPath); ok {
+	if _, err := os.Stat(outPath); err == nil {
 		logs.Debug("file is exist! : ", outPath)
-		return false, "", ""
+		return "", "", false
 
 	}
 
 	outFile, err := os.Create(outPath)
 	if err != nil {
 		logs.Debug(err)
-		return false, "", ""
+		return "", "", false
 	}
 	defer outFile.Close()
 
 	if _, err = io.Copy(outFile, file); err != nil {
 		logs.Debug(err)
-		return false, "", ""
+		return "", "", false
 	}
 	fi, err := outFile.Stat()
 	if err != nil {
 		logs.Debug(err)
-		return false, "", ""
+		return "", "", false
 	}
 
 	if fi.Size() != handler.Size {
 		logs.Debug("(error)file uncomplete")
-		return false, "", ""
+		return "", "", false
 	}
 	surl := strings.Replace(outPath, node.Parent, "", 1)
 	logs.Debug("Successfully Uploaded File: ", handler.Filename)
-	return true, outPath, surl
+	return outPath, surl, true
 }
 
 func mkdir(fp string) (string, error) {
-	if ok, _ := isExists(fp); ok {
+	if _, err := os.Stat(fp); err == nil {
 		logs.Debug(fp, " is exist!")
 		return fp, nil
 	} else {
@@ -229,14 +224,15 @@ func mkdir(fp string) (string, error) {
 		return fp, nil
 	}
 }
+
 /*
- create path by (r Node), 
+ create path by (r Node),
 
 */
 func getCurrentPath(r Node) (string, error) {
 
 	f1 := r.Parent + "/" + r.Pnode + "/" + r.Inode + "/" + r.Date + "/" + r.Domain
-	if ok, _ := isExists(f1); ok {
+	if _, err := os.Stat(f1); err == nil {
 		logs.Debug(f1, " is exist!")
 		return f1, nil
 	}
@@ -279,29 +275,32 @@ func getCurrentPath(r Node) (string, error) {
 }
 
 // exists returns whether the given file or directory exists
-func isExists(path string) (bool, error) {
+/*
+func isExists(path string)  error {
 	_, err := os.Stat(path)
 	if err == nil {
-		return true, nil
+		return nil
 	}
+
 	if os.IsNotExist(err) {
 		return false, nil
 	}
 	logs.Debug(err)
 	return false, err
 }
+*/
 
 func peerSync(fn string) {
 	slist := strings.Split(LNode.Queues, ";")
 	ok := true
 	for _, v := range slist {
 		logs.Debug("peerSync to ", v, ": ", fn)
-		if err := localPostFile(fn, "http://"+v+ URL_COMMAND_PEER_UPLOAD ); err != nil {
+		if err := localPostFile(fn, "http://"+v+URL_COMMAND_PEER_UPLOAD); err != nil {
 			ok = false
 		}
 	}
 	if !ok {
-           logs.Debug("fail to peerSync:", fn)
+		logs.Debug("fail to peerSync:", fn)
 	}
 }
 
@@ -309,19 +308,19 @@ func localPostFile(filename string, targetUrl string) error {
 	bodyBuf := &bytes.Buffer{}
 	bodyWriter := multipart.NewWriter(bodyBuf)
 
-        ffn := filename
+	ffn := filename
 	sv := strings.Split(filename, "/")
 	if len(sv) > 0 {
 		ffn = sv[len(sv)-1]
 	}
 
-        scrumb := utils.CreateScrumb()
+	scrumb := utils.CreateScrumb()
 
-         bodyWriter.WriteField( AUTH_SCRUMB_KEY,  scrumb)
-         bodyWriter.WriteField(sPostFilePathKey, filename)
-       // this step is very important
+	bodyWriter.WriteField(AUTH_SCRUMB_KEY, scrumb)
+	bodyWriter.WriteField(sPostFilePathKey, filename)
+	// this step is very important
 
-        fileWriter, err := bodyWriter.CreateFormFile(sPostFileNameKey, ffn) // filename)
+	fileWriter, err := bodyWriter.CreateFormFile(sPostFileNameKey, ffn) // filename)
 	if err != nil {
 		logs.Debug("error writing to buffer")
 		return err
@@ -355,12 +354,12 @@ func localPostFile(filename string, targetUrl string) error {
 	}
 	logs.Debug(resp.Status)
 	logs.Debug(string(resp_body))
-        if resp.StatusCode == http.StatusOK {
-	logs.Debug("peer to upload successful!")
-	return nil
+	if resp.StatusCode == http.StatusOK {
+		logs.Debug("peer to upload successful!")
+		return nil
 	} else {
-       	logs.Debug("peer to upload fail! ", resp.Status)
-	return fmt.Errorf(resp.Status)
+		logs.Debug("peer to upload fail! ", resp.Status)
+		return fmt.Errorf(resp.Status)
 	}
 }
 
@@ -447,12 +446,12 @@ func syncByDatePath(datePath string) (error, string) {
 						}
 						if bRun {
 
-						 err := localPostFile(fn, "http://" + v +  URL_COMMAND_PEER_UPLOAD )
-						        if err != nil {
-              logs.Debug(err)
-	      reterr = err
+							err := localPostFile(fn, "http://"+v+URL_COMMAND_PEER_UPLOAD)
+							if err != nil {
+								logs.Debug(err)
+								reterr = err
 							}
-						        logs.Debug("sync to remote server", fn)
+							logs.Debug("sync to remote server", fn)
 							time.Sleep(2 * time.Second)
 						}
 					}
@@ -565,7 +564,7 @@ func releaseBackSyncLock() {
 
 func backgroundSync() error {
 
-        LfsStatModify()
+	LfsStatModify()
 	logs.Debug("backgroundSync, current iNode = ", LNode.Inode)
 	//  get remote inode info by Node.Queues
 	//  check current inode info
@@ -593,41 +592,40 @@ func backgroundSync() error {
 	return nil
 }
 
- func GetLfsStatQuantity() int {
-         LfsStat.Lock.RLock()
-         i := LfsStat.Quantity
-         LfsStat.Lock.RUnlock()
-         return i
- }
+func GetLfsStatQuantity() int {
+	LfsStat.Lock.RLock()
+	i := LfsStat.Quantity
+	LfsStat.Lock.RUnlock()
+	return i
+}
 
- func GetLfsStatStart() time.Time {
-         LfsStat.Lock.RLock()
-         i := LfsStat.StartTime
-         LfsStat.Lock.RUnlock()
-         return i
- }
+func GetLfsStatStart() time.Time {
+	LfsStat.Lock.RLock()
+	i := LfsStat.StartTime
+	LfsStat.Lock.RUnlock()
+	return i
+}
 
 func GetLfsStatModTime() time.Time {
-         LfsStat.Lock.RLock()
-         i := LfsStat.ModTime
-         LfsStat.Lock.RUnlock()
-         return i
- }
+	LfsStat.Lock.RLock()
+	i := LfsStat.ModTime
+	LfsStat.Lock.RUnlock()
+	return i
+}
 
- func LfsStatStart() {
-         LfsStat.Lock.RLock()
-         LfsStat.StartTime = time.Now().UTC().Add(8 * time.Hour)
-         LfsStat.Lock.RUnlock()
- }
+func LfsStatStart() {
+	LfsStat.Lock.RLock()
+	LfsStat.StartTime = time.Now().UTC().Add(8 * time.Hour)
+	LfsStat.Lock.RUnlock()
+}
 
- func LfsStatModify() {
-         LfsStat.Lock.Lock()
-         LfsStat.ModTime = time.Now().UTC().Add(8 * time.Hour)
-         LfsStat.Lock.Unlock()
- }
- func LfsStatQuantityIncr() {
-         LfsStat.Lock.Lock()
-         LfsStat.Quantity++
-         LfsStat.Lock.Unlock()
- }
-
+func LfsStatModify() {
+	LfsStat.Lock.Lock()
+	LfsStat.ModTime = time.Now().UTC().Add(8 * time.Hour)
+	LfsStat.Lock.Unlock()
+}
+func LfsStatQuantityIncr() {
+	LfsStat.Lock.Lock()
+	LfsStat.Quantity++
+	LfsStat.Lock.Unlock()
+}

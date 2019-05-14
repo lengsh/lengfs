@@ -63,7 +63,10 @@ err :="lfs.LNode.Parent must be relative or absolute path: begin with '.' or '/'
 	http.HandleFunc(lfs.URL_COMMAND_PATH_INFO, pathInfo)
 	http.HandleFunc(lfs.URL_COMMAND_PEER_UPLOAD, peerUpload)
 	http.HandleFunc(lfs.URL_COMMAND_DEFAULT, lfsStat)
-	/**********/
+        http.HandleFunc("/api/jwtToken/v1/", jwtToken)
+        http.HandleFunc("/api/apiJson/v1/", user.JwtAuth( apiJson ))
+
+/**********/
 }
 
 func upload(w http.ResponseWriter, r *http.Request) {
@@ -139,6 +142,55 @@ func pathInfo(w http.ResponseWriter, r *http.Request) {
 
 func pathSync(w http.ResponseWriter, r *http.Request) {
 	lfs.LNode.SyncPathFile(w, r)
+}
+
+func apiJson(w http.ResponseWriter, r *http.Request) {
+        if strings.HasSuffix(r.RequestURI, "/favicon.ico") {
+                return
+        }
+        err := r.ParseForm()
+        if err != nil {
+                fmt.Println(err)
+        }
+        // create new token
+           rets :=`             
+        { "sites" : 
+[{ "name":"菜鸟教程" , "url":"www.runoob.com" }, 
+{ "name":"google" , "url":"www.google.com" },
+{ "name":"微博" , "url":"www.weibo.com" }
+]}
+`
+                w.Header().Set("Content-Type", "text/json")
+                w.Write([]byte(rets))
+}
+
+
+func jwtToken(w http.ResponseWriter, r *http.Request) {
+        if strings.HasSuffix(r.RequestURI, "/favicon.ico") {
+                return
+        }
+        err := r.ParseForm()
+        if err != nil {
+                http.Error(w, http.StatusText(http.StatusNonAuthoritativeInfo), http.StatusNonAuthoritativeInfo)
+                return
+        }
+
+        switch r.Method {
+        case http.MethodGet:
+        case http.MethodPost:
+                usr := strings.ToLower(r.FormValue("user"))
+                salt := r.FormValue("salt")
+                if len(usr) <= 0 || len(salt) <= 0 {
+                        fmt.Println("no user or salt ")
+                        http.Error(w, http.StatusText(http.StatusNonAuthoritativeInfo), http.StatusNonAuthoritativeInfo)
+                        return
+                }
+                token := user.GetToken(usr, salt, 1000)
+                w.Header().Set("Content-Type", "text/html")
+                w.Write([]byte( token ))
+                return
+        }
+        http.Error(w, http.StatusText(http.StatusNonAuthoritativeInfo), http.StatusNonAuthoritativeInfo)
 }
 
 func uploadView(fn string) ([]byte, error) {

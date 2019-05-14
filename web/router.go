@@ -12,6 +12,7 @@ func Router() {
 	http.HandleFunc("/", lfsStat)
 	http.HandleFunc("/hello/", hello)
 	http.HandleFunc("/login", login)
-	http.HandleFunc("/userinfo/", user.JwtAuth(userinfo))
-	http.HandleFunc("/api/userinfo/v1/", user.JwtAuth(userinfo))
+	http.HandleFunc("/hello/", hello)
+http.HandleFunc("/api/userinfo/v1/", user.JwtAuth(userinfo))
+
 }

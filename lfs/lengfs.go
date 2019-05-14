@@ -207,7 +207,7 @@ func saveFile2Node(w http.ResponseWriter, r *http.Request, node Node) (string, s
 		return "", "", false
 	}
 	surl := strings.Replace(outPath, node.Parent, "", 1)
-	logs.Debug("Successfully Uploaded File: ", handler.Filename)
+	logs.Debug("Successfully Uploaded File: ", handler.Filename, " ; save as ", outPath)
 	return outPath, surl, true
 }
 

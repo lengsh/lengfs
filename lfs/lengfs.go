@@ -86,7 +86,7 @@ func (node Node) PeerUploadFile(w http.ResponseWriter, r *http.Request) (string,
 		if len(path) > 0 {
 			logs.Debug(path)
 			if ok, node1 := string2Node(path); ok {
-				logs.Debug("upload from(client) ", node1.Inode)
+				logs.Debug("upload from(client) Node =", node1)
 				return saveFile2Node(w, r, node1)
 			}
 		}
@@ -373,17 +373,19 @@ func string2Node(files string) (bool, Node) {
 	}
 
 	sv := strings.Split(files, "/")
-	ilen := len(sv)
-	if ilen < 6 {
-		return false, LNode
-	}
 
-	n := Node{}
-	n.Parent = LNode.Parent
-	n.Pnode = sv[2]
-	n.Inode = sv[3]
-	n.Date = sv[4]
-	n.Domain = sv[5]
+        iNum  := len(sv)
+        if iNum < 6 {
+                 return false, LNode
+        }
+
+        n := Node{}
+        n.Parent = LNode.Parent
+        n.Pnode = sv[ iNum - 5]
+        n.Inode = sv[ iNum - 4]
+        n.Date = sv[ iNum - 3]
+        n.Domain = sv[ iNum -2]
+
 	logs.Debug("!!!!!!! ", files, ", string2Node (pay atention to Domain):", n)
 	return true, n
 }

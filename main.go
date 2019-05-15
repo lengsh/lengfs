@@ -15,6 +15,10 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+"errors"
+	"os/exec"
+	"path/filepath"
+	"strings"
 )
 
 var ( // main operation modes
@@ -40,7 +44,8 @@ func runInit() {
 	if len(os.Args) < 2 {
 		usage()
 	}
-        lfs.LNode.Parent = "./static"
+        cdir , _ :=  getCurrentPath()
+        lfs.LNode.Parent = cdir +"static"
 //        lfs.LNode.Parent = "/var/tmp/lengfs"
 	lfs.LNode.Pnode = "lengfs"
 	lfs.LNode.Inode = *node
@@ -58,6 +63,26 @@ func runInit() {
         logs.Debug(*queues)
         os.MkdirAll(lfs.LNode.Parent, 0755)
 	fmt.Println(lfs.LNode)
+}
+
+
+func getCurrentPath() (string, error) {
+	file, err := exec.LookPath(os.Args[0])
+	if err != nil {
+		return "", err
+	}
+	path, err := filepath.Abs(file)
+	if err != nil {
+		return "", err
+	}
+	i := strings.LastIndex(path, "/")
+	if i < 0 {
+		i = strings.LastIndex(path, "\\")
+	}
+	if i < 0 {
+		return "", errors.New(`error: Can't find "/" or "\".`)
+	}
+	return string(path[0 : i+1]), nil
 }
 
 func main() {

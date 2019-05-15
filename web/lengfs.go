@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/astaxie/beego/logs"
+//	form "github.com/lengsh/findme/orm"
 	"github.com/lengsh/findme/user"
 	"github.com/lengsh/findme/utils"
 	"github.com/lengsh/lengfs/lfs"
@@ -22,39 +23,16 @@ import (
 
 func lfs_router_register() {
 	PthSep := string(os.PathSeparator)
-	lengfs := PthSep + lfs.LNode.Pnode + PthSep //  "/lengfs/"
+	lengfs := PthSep + lfs.LNode.Pnode + PthSep // such as  "/lengfs/"
 
-	if !strings.HasPrefix(lfs.LNode.Parent, PthSep) &&  !strings.HasPrefix(lfs.LNode.Parent, ".") {
-err :="lfs.LNode.Parent must be relative or absolute path: begin with '.' or '/', but now it's = " + lfs.LNode.Parent
-	     logs.Error( err)
-	     panic(err)
+	if !strings.HasPrefix(lfs.LNode.Parent, PthSep) {
+		err := "lfs.LNode.Parent must be absolute path: begin with '/', but now it's = " + lfs.LNode.Parent
+		logs.Error(err)
+		panic(err)
 	}
-	lengfs_Local_dir := ""
-	if strings.HasPrefix(lfs.LNode.Parent, PthSep) {
-		lengfs_Local_dir = lfs.LNode.Parent
-	} else {
-		if len(utils.ServerConfig.WebDir) < 1 {
-			utils.ServerConfig.WebDir = "." + PthSep
-		}
-		if strings.HasSuffix(utils.ServerConfig.WebDir, PthSep) {
-			lengfs_Local_dir = utils.ServerConfig.WebDir
-		} else {
-			lengfs_Local_dir = utils.ServerConfig.WebDir + PthSep
-		}
-
-		logs.Debug("1: fs dir:", lengfs_Local_dir)
-
-		if strings.HasPrefix(lfs.LNode.Parent, ".") {
-			lengfs_Local_dir = lengfs_Local_dir + strings.Replace(lfs.LNode.Parent, "./", "", 1) //   "./static/lengfs/"
-			logs.Debug(lfs.LNode.Parent, "\n", lengfs_Local_dir)
-		} else {
-			lengfs_Local_dir = lengfs_Local_dir + lfs.LNode.Parent //   "./static/lengfs/"
-		}
-		logs.Debug("2: fs dir:", lengfs_Local_dir)
-	}
-	lengfs_Local_dir += lengfs
-	logs.Debug("3: fs dir:", lengfs_Local_dir)
-	http.Handle(lengfs, http.StripPrefix(lengfs, http.FileServer(http.Dir(lengfs_Local_dir))))
+        lfsDir := lfs.LNode.Parent + lengfs
+	fmt.Println("fs path:", lfsDir , "  --> http file dir locate !" )
+	http.Handle(lengfs, http.StripPrefix(lengfs, http.FileServer(http.Dir( lfsDir ))))
 	/*****
 	  lfs web command
 	  ******/
@@ -63,10 +41,7 @@ err :="lfs.LNode.Parent must be relative or absolute path: begin with '.' or '/'
 	http.HandleFunc(lfs.URL_COMMAND_PATH_INFO, pathInfo)
 	http.HandleFunc(lfs.URL_COMMAND_PEER_UPLOAD, peerUpload)
 	http.HandleFunc(lfs.URL_COMMAND_DEFAULT, lfsStat)
-        http.HandleFunc("/api/jwtToken/v1/", jwtToken)
-        http.HandleFunc("/api/apiJson/v1/", user.JwtAuth( apiJson ))
-
-/**********/
+	/**********/
 }
 
 func upload(w http.ResponseWriter, r *http.Request) {
@@ -144,54 +119,6 @@ func pathSync(w http.ResponseWriter, r *http.Request) {
 	lfs.LNode.SyncPathFile(w, r)
 }
 
-func apiJson(w http.ResponseWriter, r *http.Request) {
-        if strings.HasSuffix(r.RequestURI, "/favicon.ico") {
-                return
-        }
-        err := r.ParseForm()
-        if err != nil {
-                fmt.Println(err)
-        }
-        // create new token
-           rets :=`             
-        { "sites" : 
-[{ "name":"菜鸟教程" , "url":"www.runoob.com" }, 
-{ "name":"google" , "url":"www.google.com" },
-{ "name":"微博" , "url":"www.weibo.com" }
-]}
-`
-                w.Header().Set("Content-Type", "text/json")
-                w.Write([]byte(rets))
-}
-
-
-func jwtToken(w http.ResponseWriter, r *http.Request) {
-        if strings.HasSuffix(r.RequestURI, "/favicon.ico") {
-                return
-        }
-        err := r.ParseForm()
-        if err != nil {
-                http.Error(w, http.StatusText(http.StatusNonAuthoritativeInfo), http.StatusNonAuthoritativeInfo)
-                return
-        }
-
-        switch r.Method {
-        case http.MethodGet:
-        case http.MethodPost:
-                usr := strings.ToLower(r.FormValue("user"))
-                salt := r.FormValue("salt")
-                if len(usr) <= 0 || len(salt) <= 0 {
-                        fmt.Println("no user or salt ")
-                        http.Error(w, http.StatusText(http.StatusNonAuthoritativeInfo), http.StatusNonAuthoritativeInfo)
-                        return
-                }
-                token := user.GetToken(usr, salt, 1000)
-                w.Header().Set("Content-Type", "text/html")
-                w.Write([]byte( token ))
-                return
-        }
-        http.Error(w, http.StatusText(http.StatusNonAuthoritativeInfo), http.StatusNonAuthoritativeInfo)
-}
 
 func uploadView(fn string) ([]byte, error) {
 	html := `
@@ -236,6 +163,7 @@ func statView() ([]byte, error) {
 	stat := "<div><H1>current INode = " + lfs.LNode.Inode + "</H1></div>"
 	stat += "<div>Start = " + lfs.GetLfsStatStart().Format("2006-01-02 15:04:05") + "<BR>" + "modtime = " + lfs.GetLfsStatModTime().Format("2006-01-02 15:04:05") + "<BR></div>"
 
+       ds := time.Now().UTC().Add(8*time.Hour).Format("20060102")
 	str := `
 <HTML>
 <head>
@@ -256,8 +184,8 @@ func statView() ([]byte, error) {
         <a href="/lfs/">lengfs</a><BR>
         <a href="/login">login</a><BR>
         <a href="/lfs/upload/">lfs/upload</a><BR>
-        <a href="/lfs/psync/?date=20190430">/lfs/psync/?date=20190430</a><BR>
-        <a href="/lfs/pathinfo/?date=20190430&inode=0">/lfs/pathinfo/?date=20190430&inode=0</a><BR>
+<a href="/lfs/psync/?date=`+ ds +`">/lfs/psync/?date=`+ ds + `</a><BR>
+        <a href="/lfs/pathinfo/?date=`+ ds + `&inode=`+ lfs.LNode.Inode + `">/lfs/pathinfo/?date=`+ ds + `&inode=`+ lfs.LNode.Inode + `</a><BR>
   </div>
 `
 	str2 := stat + `</body> </HTML> `
@@ -272,3 +200,4 @@ func statView() ([]byte, error) {
 	}
 	return buf.Bytes(), nil
 }
+

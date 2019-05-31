@@ -1,16 +1,15 @@
 package web
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/astaxie/beego/logs"
-//	form "github.com/lengsh/findme/orm"
 	"github.com/lengsh/findme/user"
 	"github.com/lengsh/findme/utils"
 	"github.com/lengsh/lengfs/lfs"
 	"html/template"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -30,12 +29,13 @@ func lfs_router_register() {
 		logs.Error(err)
 		panic(err)
 	}
-        lfsDir := lfs.LNode.Parent + lengfs
-	fmt.Println("fs path:", lfsDir , "  --> http file dir locate !" )
-	http.Handle(lengfs, http.StripPrefix(lengfs, http.FileServer(http.Dir( lfsDir ))))
+	lfsDir := lfs.LNode.Parent + lengfs
+	fmt.Println("fs path:", lfsDir, "  --> http file dir locate !")
+	http.Handle(lengfs, http.StripPrefix(lengfs, http.FileServer(http.Dir(lfsDir))))
 	/*****
 	  lfs web command
 	  ******/
+	http.HandleFunc(lfs.URL_COMMAND_USER_TEST, upload_test)
 	http.HandleFunc(lfs.URL_COMMAND_USER_UPLOAD, upload)
 	http.HandleFunc(lfs.URL_COMMAND_PSYNC, pathSync)
 	http.HandleFunc(lfs.URL_COMMAND_PATH_INFO, pathInfo)
@@ -44,6 +44,62 @@ func lfs_router_register() {
 	/**********/
 }
 
+type imglist struct {
+	Thumbnail string
+	Original  string
+}
+
+func getTemplate( view string, r *http.Request )  (*template.Template, error)  {
+	var viewRoot string
+	if !isMobile(r) {
+		viewRoot = utils.ServerConfig.WebDir + "pview/"
+	} else {
+		viewRoot = utils.ServerConfig.WebDir + "mview/"
+	}
+ 	return  template.New( view ).Funcs(template.FuncMap{
+		"UserName": func() template.HTML {
+			return template.HTML("lengsh")
+		},
+		"Scrumb": func() template.HTML {
+			return template.HTML(utils.CreateScrumb())
+		},
+		"DateFormat": func( t time.Time, format string ) template.HTML {
+                          return template.HTML( t.Format(format))
+                },
+	}).ParseFiles(viewRoot+ view , viewRoot+"header.gtpl", viewRoot+"footer.gtpl")
+}
+
+
+func upload_test(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.RequestURI, "/favicon.ico") {
+		return
+	}
+
+	if !user.IsValid(r) {
+		http.Redirect(w, r, "/login?goback="+lfs.URL_COMMAND_USER_UPLOAD, http.StatusFound)
+		return
+	}
+
+	node := lfs.LNode
+	u, _ := user.GetUser(r)
+	if usr, ok := u["user"]; ok {
+		node.Domain = strings.Replace(usr.(string), "@", ".", 10)
+	}
+	r.ParseForm()
+	//   fmt.Println(r.Form)
+	//  fmt.Println(r.PostForm)
+
+	data := getDatefiles()
+        t, er := getTemplate("uptest.gtpl", r)
+	if er != nil {
+           logs.Error(er)
+	   return
+	}
+	err := t.Execute(w, data)
+	if err != nil {
+		logs.Error(err.Error())
+	}
+}
 func upload(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(r.RequestURI, "/favicon.ico") {
 		return
@@ -62,38 +118,72 @@ func upload(w http.ResponseWriter, r *http.Request) {
 
 	node.Date = time.Now().Format("20060102")
 
-	fview := ""
+	data := imglist{}
 	if r.Method == "POST" {
-		if url, ok := node.UserUploadFile(w, r); ok {
-			logs.Debug(url)
-			fview = url
+		if url, nail, ok := node.UserUploadFile(w, r); ok {
+			data.Original = url
+			data.Thumbnail = nail
 		} else {
 			logs.Debug("fail to upload file")
 		}
+		if gotos := r.FormValue("goto"); len(gotos) > 0 { // has goto url
+			gourl := gotos + "?Orig=" + data.Original + "&thumbnail=" + data.Thumbnail
+			http.Redirect(w, r, gourl, http.StatusFound)
+			return
+		}
+
 	}
-	view, err := uploadView(fview)
+/*
+	var viewRoot string
+	if !isMobile(r) {
+		viewRoot = utils.ServerConfig.WebDir + "pview/"
+	} else {
+		viewRoot = utils.ServerConfig.WebDir + "mview/"
+	}
+	fmt.Println(viewRoot)
+	t, _ := template.New("upload.gtpl").Funcs(template.FuncMap{
+		"UserName": func() template.HTML {
+			return template.HTML(user.UserNameScript(r))
+		},
+	}).ParseFiles(viewRoot+"upload.gtpl", viewRoot+"header.gtpl", viewRoot+"footer.gtpl")
+*/
+
+        t, er := getTemplate("upload.gtpl", r)
+	if er != nil {
+           logs.Error(er)
+	   return
+	}
+	err := t.Execute(w, data)
 	if err != nil {
-		fmt.Println(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		logs.Error(err.Error())
 	}
-	w.Header().Set("Content-Type", "text/html")
-	w.Write(view)
+
 }
 
 func lfsStat(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(r.RequestURI, "/favicon.ico") {
 		return
 	}
-
+/*
 	view, err := statView()
 	if err != nil {
 		fmt.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
 	w.Write(view)
+*/
+        data := map[string]interface{}{ "Node":lfs.LNode,"Stat":lfs.LfsStat}
+        t, er := getTemplate("stat.gtpl", r)
+	if er != nil {
+           logs.Error(er)
+	   return
+	}
+	err := t.Execute(w, data)
+	if err != nil {
+		logs.Error(err.Error())
+	}
 }
 
 func peerUpload(w http.ResponseWriter, r *http.Request) {
@@ -112,92 +202,82 @@ func peerUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 func pathInfo(w http.ResponseWriter, r *http.Request) {
-	lfs.LNode.PathInfo(w, r)
+
+    r.ParseForm() //解析url传递的参数，对于POST则解析响应包的主体（request body）
+        //   date=?&inode=?&.scrumb=?
+        fdate := r.FormValue(lfs.LFS_SYNC_FilePathKey)
+        inode := r.FormValue(lfs.LFS_SYNC_FileInodeKey)
+        if len(fdate) <= 1 || len(inode) < 1 {
+                logs.Debug("error to get param by ", lfs.LFS_SYNC_FilePathKey)
+                w.WriteHeader(http.StatusInternalServerError)
+        }
+
+       rest := lfs.LNode.PathInfo(fdate, inode)
+       flist := strings.Split(rest, lfs.LFS_FILENAMESEPARATOR)
+      for k,v := range flist {
+        fmt.Println(k," = ", v)
+      }
+        // data := map[string]interface{}{ "Node":lfs.LNode,"Stat":lfs.LfsStat}
+        t, er := getTemplate("pathinfo.gtpl", r)
+	if er != nil {
+           logs.Error(er)
+	   return
+	}
+	err := t.Execute(w, flist)
+	if err != nil {
+		logs.Error(err.Error())
+	}
+/*
+        logs.Debug(rest)
+        w.Header().Set("Content-Type", "text/html;charset=utf-8")
+        w.Write([]byte(rest))
+*/
 }
 
 func pathSync(w http.ResponseWriter, r *http.Request) {
-	lfs.LNode.SyncPathFile(w, r)
-}
 
-
-func uploadView(fn string) ([]byte, error) {
-	html := `
-<HTML>
-<head>
-	<meta charset="utf-8" />
-	<title>lengfs</title>
-</head>
-<body>
- <div align=center>
-    <form enctype="multipart/form-data" action="/lfs/upload/" method="post" >
-         <input type="file" name="file" />
-         <input type="submit" value="upload" />
-	 <input type="hidden" name=".scrumb" value="` + utils.CreateScrumb() + `"  />
-</form>
-</div>
-`
-	if len(fn) > 0 {
-		str := ` <div><h1>Successful upload file's URL</h1> `
-		str2 := `<a href="` + fn + `">` + fn + "</a> </div>"
-		html = html + str + str2
+         r.ParseForm() //解析url传递的参数，对于POST则解析响应包的主体（request body）
+         fn := r.FormValue(lfs.LFS_SYNC_FilePathKey)
+	 lfs.LNode.SyncPathFile( fn )
+        // data := map[string]interface{}{ "Node":lfs.LNode,"Stat":lfs.LfsStat}
+        t, er := getTemplate("sync.gtpl", r)
+	if er != nil {
+           logs.Error(er)
+	   return
 	}
-
-	html += `
-<BR>
-<a href="/lfs/">lengfs Home</a>
-</body>
-</HTML>
- `
-	buf := &bytes.Buffer{}
-	tmpl := template.Must(template.New("upload").Parse(html))
-	err := tmpl.Execute(buf, nil)
+	err := t.Execute(w, nil)
 	if err != nil {
-		return nil, err
+		logs.Error(err.Error())
 	}
-	return buf.Bytes(), nil
 }
 
-func statView() ([]byte, error) {
-	fHts := "<div><h1> curent lfs's dir path</h1></div>"
-	fHts += "<a href='/" + lfs.LNode.Pnode + "/'>" + lfs.LNode.Pnode + "</a><BR>"
-	stat := "<div><H1>current INode = " + lfs.LNode.Inode + "</H1></div>"
-	stat += "<div>Start = " + lfs.GetLfsStatStart().Format("2006-01-02 15:04:05") + "<BR>" + "modtime = " + lfs.GetLfsStatModTime().Format("2006-01-02 15:04:05") + "<BR></div>"
+func isMobile(r *http.Request) bool {
 
-       ds := time.Now().UTC().Add(8*time.Hour).Format("20060102")
-	str := `
-<HTML>
-<head>
-	<meta charset="utf-8" />
-	<title>lengfs</title>
-</head>
-<body>
-   <div align=left>
-   <H1>Upload Web</h1>
-    <form enctype="multipart/form-data" action="/lfs/upload/" method="post" >
-         <input type="file" name="file" />
-         <input type="submit" value="upload" />
-	 <input type="hidden" name=".scrumb" value="` + utils.CreateScrumb() + `"  />
-</form>
-  <BR>
-  <div align=left>  
-     <H1>All lfs's COMMAND:</h1>
-        <a href="/lfs/">lengfs</a><BR>
-        <a href="/login">login</a><BR>
-        <a href="/lfs/upload/">lfs/upload</a><BR>
-<a href="/lfs/psync/?date=`+ ds +`">/lfs/psync/?date=`+ ds + `</a><BR>
-        <a href="/lfs/pathinfo/?date=`+ ds + `&inode=`+ lfs.LNode.Inode + `">/lfs/pathinfo/?date=`+ ds + `&inode=`+ lfs.LNode.Inode + `</a><BR>
-  </div>
-`
-	str2 := stat + `</body> </HTML> `
-	str = str + fHts
-	html := ""
-	html = str + str2
-	buf := &bytes.Buffer{}
-	tmpl := template.Must(template.New("upload").Parse(html))
-	err := tmpl.Execute(buf, nil)
+	if agent, ok := r.Header["User-Agent"]; ok {
+		//  " /Android|webOS|iPhone|iPod|BlackBerry/i.test(navigator.userAgent))"
+		if strings.Contains(agent[0], "Android") || strings.Contains(agent[0], "iPhone") {
+			return true
+		}
+	}
+	return false
+}
+
+func getDatefiles() []imglist {
+	var files []imglist
+	root := lfs.LNode.Parent + "/" + lfs.LNode.Pnode + "/" + lfs.LNode.Inode + "/" + time.Now().UTC().Add(8*time.Hour).Format("20060102") + "/"
+	// root := LNode.Parent+  "./lengfs/0/20190528/"
+	fmt.Println("walk root = ", root)
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if strings.Contains(path, ".thumbnail.") {
+			f := strings.Replace(path, lfs.LNode.Parent, "", 1)
+			img := imglist{Thumbnail: f, Original: strings.Replace(f, ".thumbnail", "", 1)}
+			files = append(files, img)
+		}
+		return nil
+	})
 	if err != nil {
-		return nil, err
+		logs.Error(err)
 	}
-	return buf.Bytes(), nil
+	fmt.Println(files)
+	return files
 }
-

@@ -4,30 +4,37 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	// "github.com/lengsh/findme/user"
-	//        "github.com/nilslice/jwt"
 	"github.com/astaxie/beego/logs"
 	"github.com/lengsh/findme/utils"
+	"github.com/nfnt/resize"
+	"image"
+	"image/gif"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 	"sync"
 	"time"
 )
 
-const sFILENAMESEPARATOR = "\001\002<BR>"
-const sPostFileNameKey = "file"
-const sPostFilePathKey = "source"
-const sSyncFilePathKey = "date"
-const sSyncFileInodeKey = "inode"
+
+const LFS_PATH_SEPARATOR =  "/"  //+ os.PathSeparator
+const LFS_FILENAMESEPARATOR = "\001\002<BR>"
+const LFS_POST_FileNameKey = "file"
+const LFS_POST_FilePathKey = "source"
+const LFS_SYNC_FilePathKey = "date"
+const LFS_SYNC_FileInodeKey = "inode"
 const AUTH_SCRUMB_KEY = ".scrumb"
 const URL_COMMAND_PEER_UPLOAD = "/lfs/peerupload/"
 const URL_COMMAND_USER_UPLOAD = "/lfs/upload/"
 const URL_COMMAND_PATH_INFO = "/lfs/pathinfo/"
 const URL_COMMAND_PSYNC = "/lfs/psync/"
+const URL_COMMAND_USER_TEST = "/lfs/uptest/"
 const URL_COMMAND_DEFAULT = "/lfs/"
 
 // static/lengfs/Node/Date/domain/filename.xyz
@@ -46,38 +53,39 @@ type Node struct {
 }
 
 type lfsStat struct {
-	IsRunning bool
-	ModTime   time.Time
-	StartTime time.Time
-	Quantity  int
-	Lock      sync.RWMutex
+	IsRunning    bool
+	ModTime      time.Time
+	StartTime    time.Time
+	TaskPosition time.Time
+	Quantity     int
+	Lock         sync.RWMutex
 }
 
 var LNode = Node{}
-var LfsStat = lfsStat{IsRunning: false, StartTime: time.Now().UTC().Add(8 * time.Hour), Quantity: 0}
+var LfsStat = lfsStat{IsRunning: false, StartTime: time.Now().UTC().Add(8 * time.Hour), ModTime:time.Now().UTC().Add(8*time.Hour), Quantity: 0}
 
 func (r Node) String() string {
 	return fmt.Sprintf("Parent=%s, Pnode=%s, Inode=%s, Date=%s, Domain=%s, Queues=%s", r.Parent, r.Pnode, r.Inode, r.Date, r.Domain, r.Queues)
 }
 
-func (node Node) UserUploadFile(w http.ResponseWriter, r *http.Request) (string, bool) {
+func (node Node) UserUploadFile(w http.ResponseWriter, r *http.Request) (string, string, bool) {
 	r.ParseMultipartForm(10 << 20)
 	scrumb := r.FormValue(AUTH_SCRUMB_KEY)
 	if !utils.CheckScrumb(scrumb) {
 		logs.Debug("No Permiss: scrumb is error!....  ", AUTH_SCRUMB_KEY, " = ", scrumb)
-		return "", false
+		return "", "", false
 	}
 
-	if fn, url, ok := saveFile2Node(w, r, node); ok {
+	if fn, url, nail, ok := saveFile2Node(w, r, node); ok {
 		go peerSync(fn)
-		return url, ok
+		return url, nail, ok
 	}
-	return "", false
+	return "", "", false
 }
 
-func (node Node) PeerUploadFile(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+func (node Node) PeerUploadFile(w http.ResponseWriter, r *http.Request) (string, string, string, bool) {
 	r.ParseMultipartForm(10 << 20)
-	path := r.FormValue(sPostFilePathKey)
+	path := r.FormValue(LFS_POST_FilePathKey)
 
 	scrumb := r.FormValue(AUTH_SCRUMB_KEY)
 	if !utils.CheckScrumb(scrumb) {
@@ -91,16 +99,16 @@ func (node Node) PeerUploadFile(w http.ResponseWriter, r *http.Request) (string,
 			}
 		}
 	}
-	return "", "", false
+	return "", "", "", false
 }
-
+/*
 func (node Node) SyncPathFile(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm() //解析url传递的参数，对于POST则解析响应包的主体（request body）
 	retstr := "Error!"
 	//somethings is wrong! Mybe no Queues ??? " + LNode.Queues
-	fn := r.FormValue(sSyncFilePathKey)
+	fn := r.FormValue(LFS_SYNC_FilePathKey)
 	if len(fn) > 0 {
-		logs.Debug("SyncPathFile: ", sSyncFilePathKey, " = ", fn)
+		logs.Debug("SyncPathFile: ", LFS_SYNC_FilePathKey, " = ", fn)
 		base_format := "20060102"
 		_, err := time.Parse(base_format, fn)
 		if err == nil {
@@ -119,16 +127,32 @@ func (node Node) SyncPathFile(w http.ResponseWriter, r *http.Request) {
 			logs.Debug("string2Node error!", fn, "; ", err)
 		}
 	} else {
-		logs.Debug("error to get param by ", sSyncFilePathKey)
+		logs.Debug("error to get param by ", LFS_SYNC_FilePathKey)
 	}
 
 	w.Header().Set("Content-Type", "text/html;charset=utf-8")
 	retstr = retstr + "; Queues = " + LNode.Queues
 	w.Write([]byte(retstr))
 }
+*/
 
-func (node Node) PathInfo(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm() //解析url传递的参数，对于POST则解析响应包的主体（request body）
+func (node Node) SyncPathFile( fn string ) error {  //    w http.ResponseWriter, r *http.Request) {
+	if len(fn) > 0 {
+		logs.Debug("SyncPathFile: ", LFS_SYNC_FilePathKey, " = ", fn)
+		base_format := "20060102"
+		_, err := time.Parse(base_format, fn)
+		if err == nil {
+		        syncByDatePath(fn)
+                        return nil
+                 }
+         }
+	 return fmt.Errorf("something is wrong!")
+}
+
+func (node Node) PathInfo( fdate, inode string) string  {
+//      w http.ResponseWriter, r *http.Request) {
+/*
+        r.ParseForm() //解析url传递的参数，对于POST则解析响应包的主体（request body）
 	//   date=?&inode=?&.scrumb=?
 	fdate := r.FormValue(sSyncFilePathKey)
 	inode := r.FormValue(sSyncFileInodeKey)
@@ -136,33 +160,38 @@ func (node Node) PathInfo(w http.ResponseWriter, r *http.Request) {
 		logs.Debug("error to get param by ", sSyncFilePathKey)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
+	*/
+
 	logs.Debug("PathInfo  date = ", fdate)
 	logs.Debug("PathInfo by inode = ", inode, "; current server's Inode=", LNode.Inode)
 
 	err, rest := getFileByDatePath(inode, fdate)
-	if err != nil {
+         if err != nil {
 		fmt.Println(err)
 		//  w.WriteHeader(http.StatusInternalServerError)
 		//	return
 		rest = err.Error()
 	}
+	return rest
+	/*
 	logs.Debug(rest)
 	w.Header().Set("Content-Type", "text/html;charset=utf-8")
 	w.Write([]byte(rest))
+	*/
 }
 
-func saveFile2Node(w http.ResponseWriter, r *http.Request, node Node) (string, string, bool) {
+func saveFile2Node(w http.ResponseWriter, r *http.Request, node Node) (string, string, string, bool) {
 	// Parse our multipart form, 10 << 20 specifies a maximum
 	// upload of 10 MB files.
 	// 	r.ParseMultipartForm(10 << 20)
 	// FormFile returns the first file for the given key `myFile`
 	// it also returns the FileHeader so we can get the Filename,
 	// the Header and the size of the file
-	file, handler, err := r.FormFile(sPostFileNameKey)
+	file, handler, err := r.FormFile(LFS_POST_FileNameKey)
 	if err != nil {
 		logs.Debug("Error Retrieving the File")
 		logs.Debug(err)
-		return "", "", false
+		return "", "", "", false
 	}
 	defer file.Close()
 	logs.Debug("Uploaded File: ", handler.Filename)
@@ -174,41 +203,42 @@ func saveFile2Node(w http.ResponseWriter, r *http.Request, node Node) (string, s
 	tpath, err := getCurrentPath(node)
 	if err != nil {
 		logs.Debug(err)
-		return "", "", false
+		return "", "", "", false
 	}
 
 	outPath := tpath + "/" + handler.Filename
 
 	if _, err := os.Stat(outPath); err == nil {
 		logs.Debug("file is exist! : ", outPath)
-		return "", "", false
-
+		return "", "", "", false
 	}
 
 	outFile, err := os.Create(outPath)
 	if err != nil {
 		logs.Debug(err)
-		return "", "", false
+		return "", "", "", false
 	}
 	defer outFile.Close()
 
 	if _, err = io.Copy(outFile, file); err != nil {
 		logs.Debug(err)
-		return "", "", false
+		return "", "", "", false
 	}
 	fi, err := outFile.Stat()
 	if err != nil {
 		logs.Debug(err)
-		return "", "", false
+		return "", "", "", false
 	}
 
 	if fi.Size() != handler.Size {
 		logs.Debug("(error)file uncomplete")
-		return "", "", false
+		return "", "", "", false
 	}
+	nail, _ := createThumbnail(outPath)
 	surl := strings.Replace(outPath, node.Parent, "", 1)
 	logs.Debug("Successfully Uploaded File: ", handler.Filename, " ; save as ", outPath)
-	return outPath, surl, true
+	return outPath, surl, nail, true
+
 }
 
 func mkdir(fp string) (string, error) {
@@ -317,10 +347,10 @@ func localPostFile(filename string, targetUrl string) error {
 	scrumb := utils.CreateScrumb()
 
 	bodyWriter.WriteField(AUTH_SCRUMB_KEY, scrumb)
-	bodyWriter.WriteField(sPostFilePathKey, filename)
+	bodyWriter.WriteField(LFS_POST_FilePathKey, filename)
 	// this step is very important
 
-	fileWriter, err := bodyWriter.CreateFormFile(sPostFileNameKey, ffn) // filename)
+	fileWriter, err := bodyWriter.CreateFormFile( LFS_POST_FileNameKey, ffn) // filename)
 	if err != nil {
 		logs.Debug("error writing to buffer")
 		return err
@@ -374,17 +404,17 @@ func string2Node(files string) (bool, Node) {
 
 	sv := strings.Split(files, "/")
 
-        iNum  := len(sv)
-        if iNum < 6 {
-                 return false, LNode
-        }
+	iNum := len(sv)
+	if iNum < 6 {
+		return false, LNode
+	}
 
-        n := Node{}
-        n.Parent = LNode.Parent
-        n.Pnode = sv[ iNum - 5]
-        n.Inode = sv[ iNum - 4]
-        n.Date = sv[ iNum - 3]
-        n.Domain = sv[ iNum -2]
+	n := Node{}
+	n.Parent = LNode.Parent
+	n.Pnode = sv[iNum-5]
+	n.Inode = sv[iNum-4]
+	n.Date = sv[iNum-3]
+	n.Domain = sv[iNum-2]
 
 	logs.Debug("!!!!!!! ", files, ", string2Node (pay atention to Domain):", n)
 	return true, n
@@ -410,7 +440,7 @@ func syncByDatePath(datePath string) (error, string) {
 			continue
 		}
 		ret = ftext
-		flist := strings.Split(ftext, sFILENAMESEPARATOR)
+		flist := strings.Split(ftext, LFS_PATH_SEPARATOR)
 		logs.Debug("remote file list:", flist)
 		PthSep := string(os.PathSeparator)
 
@@ -472,7 +502,7 @@ func syncByDatePath(datePath string) (error, string) {
 }
 
 func getRemotePathFileList(svr string, inode string, date string) (error, string) {
-	resp, err := http.Get("http://" + svr + URL_COMMAND_PATH_INFO + "?" + sSyncFilePathKey + "=" + date + "&" + sSyncFileInodeKey + "=" + inode)
+	resp, err := http.Get("http://" + svr + URL_COMMAND_PATH_INFO + "?" + LFS_SYNC_FilePathKey + "=" + date + "&" + LFS_SYNC_FileInodeKey + "=" + inode)
 	if err != nil {
 		// handle error
 		return err, ""
@@ -517,7 +547,7 @@ func getFileByDatePath(inode, dPath string) (error, string) {
 				} else {
 					logs.Debug(ff.Name())
 					if len(flist) > 0 {
-						flist = flist + sFILENAMESEPARATOR + sDomain + PthSep + ff.Name()
+						flist = flist + LFS_FILENAMESEPARATOR  + sDomain + PthSep + ff.Name()
 					} else {
 						flist = sDomain + PthSep + ff.Name()
 					}
@@ -630,4 +660,52 @@ func LfsStatQuantityIncr() {
 	LfsStat.Lock.Lock()
 	LfsStat.Quantity++
 	LfsStat.Lock.Unlock()
+}
+
+func createThumbnail(fn string) (string, error) {
+	fws := path.Base(fn) //获取文件名带后缀
+	fex := path.Ext(fws) //获取文件后缀
+	fex = strings.ToLower(fex)
+	if fex != ".png" && fex != ".gif" && fex != ".jpg" && fex != ".jpeg" {
+		return "", fmt.Errorf("error file type")
+	}
+	file, err := os.Open(fn)
+	if err != nil {
+		logs.Error(err)
+		return "", err
+	}
+	defer file.Close()
+
+	//:= jpeg.Decode(file)
+	img, _, err := image.Decode(file)
+	if err != nil {
+		logs.Error(err)
+		return "", err
+	}
+	// resize to width 1000 using Lanczos resampling
+	// and preserve aspect ratio
+	m := resize.Thumbnail(320, 1200, img, resize.Lanczos3)
+	nailName := strings.TrimSuffix(fn, fex)
+	nailName = nailName + ".thumbnail" + fex
+	out, err := os.Create(nailName)
+	if err != nil {
+		logs.Error(err)
+		return "", err
+	}
+	defer out.Close()
+	// write new image to file
+	switch fex {
+	case ".gif":
+		gif.Encode(out, m, nil)
+	case ".jpeg":
+		fallthrough
+	case ".jpg":
+		jpeg.Encode(out, m, nil)
+	case ".png":
+		png.Encode(out, m)
+	}
+
+	surl := strings.Replace(nailName, LNode.Parent, "", 1)
+	return surl, nil
+
 }

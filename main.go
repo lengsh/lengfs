@@ -26,6 +26,7 @@ var ( // main operation modes
 	port     = flag.String("p", "8080", "server listen port.")
 	node     = flag.String("i", "0", "lengfs global node (iNode=0)")
         queues   = flag.String("s", "", "lengfs server queues, such as localhost:8080;localhost:8081")
+	// viewRoot   = flag.String("v", "./view/", "view template root")
 )
 
 func init() {

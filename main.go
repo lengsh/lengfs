@@ -52,8 +52,9 @@ func runInit() {
 	lfs.LNode.Inode = *node
 	lfs.LNode.Domain = "lengsh"
 	lfs.LNode.Queues = *queues
-        utils.ServerConfig.WebDir = "./"
- /*
+        utils.ServerConfig.WebDir = cdir  // "./"
+        
+/*
 	lfs.LNode.Parent = "./static"
 	lfs.LNode.Pnode = "lengfs"
 	lfs.LNode.Inode = *node
@@ -77,9 +78,10 @@ func getCurrentPath() (string, error) {
 		return "", err
 	}
 	i := strings.LastIndex(path, "/")
-	if i < 0 {
+/*
+if i < 0 {
 		i = strings.LastIndex(path, "\\")
-	}
+	} */
 	if i < 0 {
 		return "", errors.New(`error: Can't find "/" or "\".`)
 	}

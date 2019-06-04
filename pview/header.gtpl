@@ -13,9 +13,9 @@
 <body>
 <div class="menu" align=center>
 <a href="/">Home</a> | 
-<a href="/login"> Login </a>|
-<a href="/logout"> Logout </a>|
+<a href="/lfs/login"> Login </a>|
 <a href="/lfs/"> lengfs </a>|
+<a href="/lengfs/"> Docs </a>
 </div>
 
 {{end}}

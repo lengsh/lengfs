@@ -120,14 +120,14 @@ func upload(w http.ResponseWriter, r *http.Request) {
 
 	data := imglist{}
 	if r.Method == "POST" {
-		if url, nail, ok := node.UserUploadFile(w, r); ok {
+		if url, nail, ok := node.UserUploadFile(r); ok {
 			data.Original = url
 			data.Thumbnail = nail
 		} else {
 			logs.Debug("fail to upload file")
 		}
 		if gotos := r.FormValue("goto"); len(gotos) > 0 { // has goto url
-			gourl := gotos + "?Orig=" + data.Original + "&thumbnail=" + data.Thumbnail
+			gourl := gotos + "?original=" + data.Original + "&thumbnail=" + data.Thumbnail
 			http.Redirect(w, r, gourl, http.StatusFound)
 			return
 		}
@@ -197,7 +197,7 @@ func peerUpload(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("peer upload request now!")
 	if r.Method == "POST" {
 		node := lfs.LNode
-		node.PeerUploadFile(w, r)
+		node.PeerUploadFile( r)
 	}
 }
 
@@ -205,6 +205,8 @@ func pathInfo(w http.ResponseWriter, r *http.Request) {
 
     r.ParseForm() //解析url传递的参数，对于POST则解析响应包的主体（request body）
         //   date=?&inode=?&.scrumb=?
+     
+        beCommand := r.FormValue(lfs.LFS_SYNC_PathInfoKey )
         fdate := r.FormValue(lfs.LFS_SYNC_FilePathKey)
         inode := r.FormValue(lfs.LFS_SYNC_FileInodeKey)
         if len(fdate) <= 1 || len(inode) < 1 {
@@ -213,6 +215,11 @@ func pathInfo(w http.ResponseWriter, r *http.Request) {
         }
 
        rest := lfs.LNode.PathInfo(fdate, inode)
+		     if beCommand == lfs.LFS_SYNC_PathInfoValue {
+			     w.Header().Set("Content-Type", "text/html;charset=utf-8")
+				     w.Write([]byte(rest))
+return
+}
        flist := strings.Split(rest, lfs.LFS_FILENAMESEPARATOR)
       for k,v := range flist {
         fmt.Println(k," = ", v)

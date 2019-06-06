@@ -3,29 +3,29 @@ package main
 import (
 	"context"
 	//"net"
+	"errors"
 	"flag"
 	"fmt"
+	"github.com/astaxie/beego/logs"
 	"github.com/lengsh/findme/utils"
 	"github.com/lengsh/lengfs/lfs"
 	"github.com/lengsh/lengfs/web"
 	"log"
-	 "github.com/astaxie/beego/logs"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
-"errors"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"time"
 )
 
 var ( // main operation modes
 	confFile = flag.String("c", "./local.json", "server configure file.")
 	port     = flag.String("p", "8080", "server listen port.")
 	node     = flag.String("i", "0", "lengfs global node (iNode=0)")
-        queues   = flag.String("s", "", "lengfs server queues, such as localhost:8080;localhost:8081")
+	queues   = flag.String("s", "", "lengfs server queues, such as localhost:8080;localhost:8081")
 	// viewRoot   = flag.String("v", "./view/", "view template root")
 )
 
@@ -45,28 +45,27 @@ func runInit() {
 	if len(os.Args) < 2 {
 		usage()
 	}
-        cdir , _ :=  getCurrentPath()
-        lfs.LNode.Parent = cdir +"static"
-//        lfs.LNode.Parent = "/var/tmp/lengfs"
+	cdir, _ := getCurrentPath()
+	lfs.LNode.Parent = cdir + "static"
+	//        lfs.LNode.Parent = "/var/tmp/lengfs"
 	lfs.LNode.Pnode = "lengfs"
 	lfs.LNode.Inode = *node
 	lfs.LNode.Domain = "lengsh"
 	lfs.LNode.Queues = *queues
-        utils.ServerConfig.WebDir = cdir  // "./"
-        
-/*
-	lfs.LNode.Parent = "./static"
-	lfs.LNode.Pnode = "lengfs"
-	lfs.LNode.Inode = *node
-	lfs.LNode.Domain = "lengsh"
-	lfs.LNode.Queues = *queues
-        utils.ServerConfig.WebDir = "/Users/lengss/go/src/github.com/lengsh/lengfs"
-*/
-        logs.Debug(*queues)
-        os.MkdirAll(lfs.LNode.Parent, 0755)
+	utils.ServerConfig.WebDir = cdir // "./"
+
+	/*
+	   	lfs.LNode.Parent = "./static"
+	   	lfs.LNode.Pnode = "lengfs"
+	   	lfs.LNode.Inode = *node
+	   	lfs.LNode.Domain = "lengsh"
+	   	lfs.LNode.Queues = *queues
+	           utils.ServerConfig.WebDir = "/Users/lengss/go/src/github.com/lengsh/lengfs"
+	*/
+	logs.Debug(*queues)
+	os.MkdirAll(lfs.LNode.Parent, 0755)
 	fmt.Println(lfs.LNode)
 }
-
 
 func getCurrentPath() (string, error) {
 	file, err := exec.LookPath(os.Args[0])
@@ -78,10 +77,10 @@ func getCurrentPath() (string, error) {
 		return "", err
 	}
 	i := strings.LastIndex(path, "/")
-/*
-if i < 0 {
-		i = strings.LastIndex(path, "\\")
-	} */
+	/*
+	   if i < 0 {
+	   		i = strings.LastIndex(path, "\\")
+	   	} */
 	if i < 0 {
 		return "", errors.New(`error: Can't find "/" or "\".`)
 	}
@@ -91,8 +90,8 @@ if i < 0 {
 func main() {
 
 	runInit()
-        logs.SetLogFuncCall(true)
-        web.Router()
+	logs.SetLogFuncCall(true)
+	web.Router()
 	//wait := time.Second * 2
 	ctx, cancel := context.WithCancel(context.Background()) // context.WithTimeout(context.Background(), wait)
 	// defer cancel()
@@ -112,7 +111,7 @@ func main() {
 		}
 	}()
 
-        go lfs.JobWatch(ctx, 60 )
+	go lfs.JobWatch(ctx, 60)
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)

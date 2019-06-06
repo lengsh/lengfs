@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/lengsh/findme/user"
 	"github.com/nilslice/jwt"
-//	"html/template"
+	//	"html/template"
 	"log"
 	"net/http"
 	"strings"
@@ -32,28 +32,28 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-            data := map[string]string { "user":eusr }
-	    t, er := getTemplate("login.gtpl", r)
-            if er != nil {
-                 fmt.Println(er)
-                 return
-            }
-            err := t.Execute(w, data)
-            if err != nil {
-                fmt.Println(err.Error())
-            }
-
-/*
-		view, err := loginView(r.URL.RequestURI(), eusr)
-		if err != nil {
-			log.Println(err)
-			w.WriteHeader(http.StatusInternalServerError)
+		data := map[string]string{"user": eusr}
+		t, er := getTemplate("login.gtpl", r)
+		if er != nil {
+			fmt.Println(er)
 			return
 		}
+		err := t.Execute(w, data)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
 
-		w.Header().Set("Content-Type", "text/html")
-		w.Write(view)
-*/
+		/*
+			view, err := loginView(r.URL.RequestURI(), eusr)
+			if err != nil {
+				log.Println(err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "text/html")
+			w.Write(view)
+		*/
 	case http.MethodPost:
 		// check email & password
 		j := strings.ToLower(r.FormValue("email"))
@@ -126,4 +126,3 @@ func login(w http.ResponseWriter, r *http.Request) {
 		//http.Redirect(w, r, strings.TrimSuffix(r.URL.String(), "/login"), http.StatusFound)
 	}
 }
-

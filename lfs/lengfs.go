@@ -78,14 +78,15 @@ func (node Node) UserUploadFile(r *http.Request) (string, string, bool) {
 		return "", "", false
 	}
 
-	if fn, url, nail, ok := saveFile2Node(r, node); ok {
-		go peerSync(fn)
-		return url, nail, ok
+	if fn,nail, ok := saveFile2Node(r, node); ok {
+		go peerSync(LNode.Parent+nail)
+		go peerSync(LNode.Parent+fn)
+		return fn, nail, ok
 	}
 	return "", "", false
 }
 
-func (node Node) PeerUploadFile(r *http.Request) (string, string, string, bool) {
+func (node Node) PeerUploadFile(r *http.Request) (string, string, bool) {
 	r.ParseMultipartForm(10 << 20)
 	path := r.FormValue(LFS_POST_FilePathKey)
 
@@ -101,7 +102,7 @@ func (node Node) PeerUploadFile(r *http.Request) (string, string, string, bool) 
 			}
 		}
 	}
-	return "", "", "", false
+	return "", "", false
 }
 
 func (node Node) SyncPathFile(fn string) error { //    w http.ResponseWriter, r *http.Request) {
@@ -131,7 +132,7 @@ func (node Node) PathInfo(fdate, inode string) string {
 	return rest
 }
 
-func saveFile2Node(r *http.Request, node Node) (string, string, string, bool) {
+func saveFile2Node(r *http.Request, node Node) (string, string, bool) {
 	// Parse our multipart form, 10 << 20 specifies a maximum
 	// upload of 10 MB files.
 	// 	r.ParseMultipartForm(10 << 20)
@@ -142,7 +143,7 @@ func saveFile2Node(r *http.Request, node Node) (string, string, string, bool) {
 	if err != nil {
 		logs.Debug("Error Retrieving the File")
 		logs.Debug(err)
-		return "", "", "", false
+		return "", "", false
 	}
 	defer file.Close()
 	logs.Debug("Uploaded File: ", handler.Filename)
@@ -154,40 +155,39 @@ func saveFile2Node(r *http.Request, node Node) (string, string, string, bool) {
 	tpath, err := getCurrentPath(node)
 	if err != nil {
 		logs.Debug(err)
-		return "", "", "", false
+		return "", "", false
 	}
 	outPath := tpath + "/" + handler.Filename
 	if _, err := os.Stat(outPath); err == nil {
 		logs.Debug("file is exist! : ", outPath)
-		return "", "", "", false
+		return "", "", false
 	}
 
 	outFile, err := os.Create(outPath)
 	if err != nil {
 		logs.Debug(err)
-		return "", "", "", false
+		return "", "", false
 	}
 	defer outFile.Close()
 
 	if _, err = io.Copy(outFile, file); err != nil {
 		logs.Debug(err)
-		return "", "", "", false
+		return "", "", false
 	}
 	fi, err := outFile.Stat()
 	if err != nil {
 		logs.Debug(err)
-		return "", "", "", false
+		return "", "", false
 	}
 
 	if fi.Size() != handler.Size {
 		logs.Debug("(error)file uncomplete")
-		return "", "", "", false
+		return "", "", false
 	}
 	nail, _ := createThumbnail(outPath)
 	surl := strings.Replace(outPath, node.Parent, "", 1)
 	logs.Debug("Successfully Uploaded File: ", handler.Filename, " ; save as ", outPath)
-	return outPath, surl, nail, true
-
+	return surl, nail, true
 }
 
 func mkdir(fp string) (string, error) {
@@ -270,7 +270,8 @@ func isExists(path string)  error {
 */
 
 func peerSync(fn string) {
-	slist := strings.Split(LNode.Queues, ";")
+       logs.Debug("try to peerSync file = ",fn)
+        slist := strings.Split(LNode.Queues, ";")
 	ok := true
 	for _, v := range slist {
 		logs.Debug("peerSync to ", v, ": ", fn)

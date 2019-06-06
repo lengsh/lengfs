@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-const LFS_PATH_SEPARATOR = "/" //+ os.PathSeparator
+const LFS_PATH_SEPARATOR = string(os.PathSeparator)
 const LFS_FILENAMESEPARATOR = "\001\002<BR>"
 const LFS_POST_FileNameKey = "file"
 const LFS_POST_FilePathKey = "source"
@@ -118,7 +118,7 @@ func (node Node) SyncPathFile(fn string) error { //    w http.ResponseWriter, r 
 	return fmt.Errorf("something is wrong!")
 }
 
-func (node Node) PathInfo(fdate, inode string) string {
+func (node Node) PathInfo(fdate, inode string) (string,error) {
 	//      w http.ResponseWriter, r *http.Request) {
 	logs.Debug("PathInfo  date = ", fdate)
 	logs.Debug("PathInfo by inode = ", inode, "; current server's Inode=", LNode.Inode)
@@ -128,8 +128,9 @@ func (node Node) PathInfo(fdate, inode string) string {
 		//  w.WriteHeader(http.StatusInternalServerError)
 		//	return
 		rest = err.Error()
+		return rest,err
 	}
-	return rest
+	return rest,nil
 }
 
 func saveFile2Node(r *http.Request, node Node) (string, string, bool) {

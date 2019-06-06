@@ -140,20 +140,6 @@ func upload(w http.ResponseWriter, r *http.Request) {
 		}
 
 	}
-	/*
-		var viewRoot string
-		if !isMobile(r) {
-			viewRoot = utils.ServerConfig.WebDir + "pview/"
-		} else {
-			viewRoot = utils.ServerConfig.WebDir + "mview/"
-		}
-		fmt.Println(viewRoot)
-		t, _ := template.New("upload.gtpl").Funcs(template.FuncMap{
-			"UserName": func() template.HTML {
-				return template.HTML(user.UserNameScript(r))
-			},
-		}).ParseFiles(viewRoot+"upload.gtpl", viewRoot+"header.gtpl", viewRoot+"footer.gtpl")
-	*/
 
 	t, er := getTemplate("upload.gtpl", r)
 	if er != nil {
@@ -171,16 +157,6 @@ func lfsStat(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(r.RequestURI, "/favicon.ico") {
 		return
 	}
-	/*
-		view, err := statView()
-		if err != nil {
-			fmt.Println(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=UTF-8")
-		w.Write(view)
-	*/
 	data := map[string]interface{}{"Node": lfs.LNode, "Stat": lfs.LfsStat}
 	t, er := getTemplate("stat.gtpl", r)
 	if er != nil {
@@ -222,13 +198,14 @@ func pathInfo(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 
-	rest := lfs.LNode.PathInfo(fdate, inode)
+	rest,_ := lfs.LNode.PathInfo(fdate, inode)
 	if beCommand == lfs.LFS_SYNC_PathInfoValue {
 		w.Header().Set("Content-Type", "text/html;charset=utf-8")
 		w.Write([]byte(rest))
 		return
 	}
 	flist := strings.Split(rest, lfs.LFS_FILENAMESEPARATOR)
+
 	for k, v := range flist {
 		fmt.Println(k, " = ", v)
 	}
@@ -246,11 +223,6 @@ func pathInfo(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logs.Error(err.Error())
 	}
-	/*
-	   logs.Debug(rest)
-	   w.Header().Set("Content-Type", "text/html;charset=utf-8")
-	   w.Write([]byte(rest))
-	*/
 }
 
 func pathSync(w http.ResponseWriter, r *http.Request) {

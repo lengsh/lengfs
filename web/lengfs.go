@@ -7,7 +7,8 @@ import (
 	"github.com/lengsh/findme/utils"
 	"github.com/lengsh/lengfs/lfs"
 	"html/template"
-	"net/http"
+//	"net/url"
+"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,7 +24,7 @@ import (
 const pathSep = string(os.PathSeparator)
 
 func lfs_router_register() {
-//	PthSep := string(os.PathSeparator)
+	//	PthSep := string(os.PathSeparator)
 	lengfs := pathSep + lfs.LNode.Pnode + pathSep // such as  "/lengfs/"
 
 	if !strings.HasPrefix(lfs.LNode.Parent, pathSep) {
@@ -39,7 +40,8 @@ func lfs_router_register() {
 	  ******/
 	http.HandleFunc(lfs.URL_COMMAND_USER_TEST, upload_test)
 	http.HandleFunc(lfs.URL_COMMAND_USER_UPLOAD, upload)
-	http.HandleFunc(lfs.URL_COMMAND_PSYNC, pathSync)
+	http.HandleFunc(lfs.URL_COMMAND_PSYNC, peerSync)
+	//	http.HandleFunc(lfs.URL_COMMAND_PSYNC, pathSync)
 	http.HandleFunc(lfs.URL_COMMAND_PATH_INFO, pathInfo)
 	http.HandleFunc(lfs.URL_COMMAND_PEER_UPLOAD, peerUpload)
 	http.HandleFunc(lfs.URL_COMMAND_DEFAULT, lfsStat)
@@ -60,13 +62,13 @@ func getTemplate(view string, r *http.Request) (*template.Template, error) {
 	}
 	return template.New(view).Funcs(template.FuncMap{
 		"UserName": func() template.HTML {
-			return template.HTML("lengsh")
+			return template.HTML( user.UserName(r))
 		},
 		"Scrumb": func() template.HTML {
 			return template.HTML(utils.CreateScrumb())
 		},
-	"IsContains": func(fn string, sub string) bool {
-			return  strings.Contains(fn, sub)
+		"IsContains": func(fn string, sub string) bool {
+			return strings.Contains(fn, sub)
 		},
 		"DateFormat": func(t time.Time, format string) template.HTML {
 			return template.HTML(t.Format(format))
@@ -83,19 +85,13 @@ func upload_test(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login?goback="+lfs.URL_COMMAND_USER_UPLOAD, http.StatusFound)
 		return
 	}
-
+	r.ParseForm()
 	node := lfs.LNode
 	u, _ := user.GetUser(r)
 	if usr, ok := u["user"]; ok {
 		node.Domain = strings.Replace(usr.(string), "@", ".", 10)
 	}
-	r.ParseForm()
-	//   fmt.Println(r.Form)
-	//  fmt.Println(r.PostForm)
-       //var data = make(map[string] interface{}, 1)
-root := lfs.LNode.Parent + "/" + lfs.LNode.Pnode + "/" + lfs.LNode.Inode + "/" + time.Now().UTC().Add(8*time.Hour).Format("20060102") + "/"
-	//data["root"] = root
-	//data["data"] = getDatefiles( root )
+	root := lfs.LNode.Parent + "/" + lfs.LNode.Pnode + "/" + lfs.LNode.Inode + "/" + time.Now().UTC().Add(8*time.Hour).Format("20060102") + "/"
 	data := getDatefiles(root)
 	t, er := getTemplate("uptest.gtpl", r)
 	if er != nil {
@@ -107,6 +103,7 @@ root := lfs.LNode.Parent + "/" + lfs.LNode.Pnode + "/" + lfs.LNode.Inode + "/" +
 		logs.Error(err.Error())
 	}
 }
+
 func upload(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(r.RequestURI, "/favicon.ico") {
 		return
@@ -122,9 +119,7 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	if usr, ok := u["user"]; ok {
 		node.Domain = strings.Replace(usr.(string), "@", ".", 10)
 	}
-
 	node.Date = time.Now().Format("20060102")
-
 	data := imglist{}
 	if r.Method == "POST" {
 		if url, nail, ok := node.UserUploadFile(r); ok {
@@ -133,12 +128,17 @@ func upload(w http.ResponseWriter, r *http.Request) {
 		} else {
 			logs.Debug("fail to upload file")
 		}
-		if gotos := r.FormValue("goto"); len(gotos) > 0 { // has goto url
-			gourl := gotos + "?original=" + data.Original + "&thumbnail=" + data.Thumbnail
+
+        if gotos := r.FormValue("goto"); len(gotos) > 0 { // has goto url
+      v := r.PostForm
+        v.Set("original", data.Original)
+        v.Set( lfs.AUTH_SCRUMB_KEY, utils.CreateScrumb())
+       //  v.Set("tips", tips)
+			gourl := gotos + "?"+ v.Encode()
+			logs.Debug(gourl)
 			http.Redirect(w, r, gourl, http.StatusFound)
 			return
 		}
-
 	}
 
 	t, er := getTemplate("upload.gtpl", r)
@@ -150,14 +150,25 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logs.Error(err.Error())
 	}
-
 }
 
 func lfsStat(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(r.RequestURI, "/favicon.ico") {
 		return
 	}
-	data := map[string]interface{}{"Node": lfs.LNode, "Stat": lfs.LfsStat}
+
+     r.ParseForm()
+       vf:= r.Form
+      for k,v := range vf {
+        fmt.Println(k,"= ",v)
+      }
+
+     vf= r.PostForm
+      for k,v := range vf {
+        fmt.Println(k,"= ",v)
+      }
+
+        data := map[string]interface{}{"Node": lfs.LNode, "Stat": lfs.LfsStat}
 	t, er := getTemplate("stat.gtpl", r)
 	if er != nil {
 		logs.Error(er)
@@ -170,6 +181,9 @@ func lfsStat(w http.ResponseWriter, r *http.Request) {
 }
 
 func peerUpload(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.RequestURI, "/favicon.ico") {
+		return
+	}
 	/*
 	           if !user.IsValid(r) {
 	   		fmt.Println( http.StatusText(http.StatusNonAuthoritativeInfo))
@@ -185,10 +199,13 @@ func peerUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 func pathInfo(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.RequestURI, "/favicon.ico") {
+		return
+	}
 
 	r.ParseForm() //解析url传递的参数，对于POST则解析响应包的主体（request body）
 	//   date=?&inode=?&.scrumb=?
-        data := getDefaultData(w,r)
+	data := getDefaultData(w, r)
 
 	beCommand := r.FormValue(lfs.LFS_SYNC_PathInfoKey)
 	fdate := r.FormValue(lfs.LFS_SYNC_FilePathKey)
@@ -198,7 +215,7 @@ func pathInfo(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 
-	rest,_ := lfs.LNode.PathInfo(fdate, inode)
+	rest, _ := lfs.LNode.PathInfo(fdate, inode)
 	if beCommand == lfs.LFS_SYNC_PathInfoValue {
 		w.Header().Set("Content-Type", "text/html;charset=utf-8")
 		w.Write([]byte(rest))
@@ -209,10 +226,10 @@ func pathInfo(w http.ResponseWriter, r *http.Request) {
 	for k, v := range flist {
 		fmt.Println(k, " = ", v)
 	}
-  root :=  lfs.LNode.Pnode + "/" + lfs.LNode.Inode + "/" + time.Now().UTC().Add(8*time.Hour).Format("20060102") + "/"
- // data := map[string]interface{}{ "data":flist, "root": root}
- data["data"] = flist
- data["root"] = root
+	root := lfs.LNode.Pnode + "/" + lfs.LNode.Inode + "/" + time.Now().UTC().Add(8*time.Hour).Format("20060102") + "/"
+	// data := map[string]interface{}{ "data":flist, "root": root}
+	data["data"] = flist
+	data["root"] = root
 
 	t, er := getTemplate("pathinfo.gtpl", r)
 	if er != nil {
@@ -225,18 +242,36 @@ func pathInfo(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func pathSync(w http.ResponseWriter, r *http.Request) {
-
+func peerSync(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.RequestURI, "/favicon.ico") {
+		return
+	}
 	r.ParseForm() //解析url传递的参数，对于POST则解析响应包的主体（request body）
-	fn := r.FormValue(lfs.LFS_SYNC_FilePathKey)
-	lfs.LNode.SyncPathFile(fn)
-	// data := map[string]interface{}{ "Node":lfs.LNode,"Stat":lfs.LfsStat}
+	//   fmt.Println( r.Form[lfs.LFS_POST_FileNameKey])
+	fpath := r.FormValue(lfs.LFS_SYNC_FilePathKey)
+	fname := r.FormValue(lfs.LFS_POST_FileNameKey)
+	scrumb := r.FormValue(lfs.AUTH_SCRUMB_KEY)
+	if !utils.CheckScrumb(scrumb) {
+		logs.Debug("No Permiss: scrumb is error!....  ", lfs.AUTH_SCRUMB_KEY, " = ", scrumb)
+		w.Header().Set("Content-Type", "text/html;charset=utf-8")
+		w.Write([]byte("ERROR, No Permiss!!"))
+		return
+	}
+
+	if len(fpath) > 0 {
+		lfs.LNode.SyncPathFile(fpath)
+	}
+	if len(fname) > 0 {
+		fmt.Println(fname + "\n Should to do PeerSyncFile ")
+		go  lfs.PeerSyncFile(fname)
+	}
+	data := map[string]interface{}{ "File": fname+fpath }
 	t, er := getTemplate("sync.gtpl", r)
 	if er != nil {
 		logs.Error(er)
 		return
 	}
-	err := t.Execute(w, nil)
+	err := t.Execute(w, data)
 	if err != nil {
 		logs.Error(err.Error())
 	}
@@ -253,7 +288,7 @@ func isMobile(r *http.Request) bool {
 	return false
 }
 
-func getDatefiles( root string ) []imglist {
+func getDatefiles(root string) []imglist {
 	var files []imglist
 	// root := lfs.LNode.Parent + "/" + lfs.LNode.Pnode + "/" + lfs.LNode.Inode + "/" + time.Now().UTC().Add(8*time.Hour).Format("20060102") + "/"
 	// root := LNode.Parent+  "./lengfs/0/20190528/"

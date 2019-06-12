@@ -77,8 +77,8 @@ func (node Node) UserUploadFile(r *http.Request) (string, string, bool) {
 		logs.Debug("No Permiss: scrumb is error!....  ", AUTH_SCRUMB_KEY, " = ", scrumb)
 		return "", "", false
 	}
-
-	if fn,nail, ok := saveFile2Node(r, node); ok {
+       node.Date = time.Now().UTC().Add(8*time.Hour).Format("20060102")
+	if fn,nail, ok := saveFile2Node(r, node, true); ok {
 		go peerSync(LNode.Parent+nail)
 		go peerSync(LNode.Parent+fn)
 		return fn, nail, ok
@@ -98,11 +98,28 @@ func (node Node) PeerUploadFile(r *http.Request) (string, string, bool) {
 			logs.Debug(path)
 			if ok, node1 := string2Node(path); ok {
 				logs.Debug("upload from(client) Node =", node1)
-				return saveFile2Node(r, node1)
+				return saveFile2Node(r, node1, false)
 			}
 		}
 	}
 	return "", "", false
+}
+
+func PeerSyncFile( fname string)  {
+  // fname == "/lengfs/0/20190611/abc.jpeg"
+  //   node.Date = time.Now().UTC().Add(8*time.Hour).Format("20060102")
+    // 
+    logs.Debug(LNode.Parent + fname)
+    peerSync(LNode.Parent+fname)
+}
+
+func NotifyLfs2Sync(svr string, fname string)  {
+logs.Debug(svr+ "/lfs/psync/?"+LFS_POST_FileNameKey+"="+fname + "&"+AUTH_SCRUMB_KEY+"="+utils.CreateScrumb())
+resp, err := http.Get( svr+"/lfs/psync/?"+LFS_POST_FileNameKey+"="+fname + "&"+AUTH_SCRUMB_KEY+"="+utils.CreateScrumb())
+	if err != nil {
+		logs.Debug(err)
+	}
+	defer resp.Body.Close()
 }
 
 func (node Node) SyncPathFile(fn string) error { //    w http.ResponseWriter, r *http.Request) {
@@ -133,7 +150,7 @@ func (node Node) PathInfo(fdate, inode string) (string,error) {
 	return rest,nil
 }
 
-func saveFile2Node(r *http.Request, node Node) (string, string, bool) {
+func saveFile2Node(r *http.Request, node Node, bCreate bool) (string, string, bool) {
 	// Parse our multipart form, 10 << 20 specifies a maximum
 	// upload of 10 MB files.
 	// 	r.ParseMultipartForm(10 << 20)
@@ -185,9 +202,13 @@ func saveFile2Node(r *http.Request, node Node) (string, string, bool) {
 		logs.Debug("(error)file uncomplete")
 		return "", "", false
 	}
-	nail, _ := createThumbnail(outPath)
 	surl := strings.Replace(outPath, node.Parent, "", 1)
-	logs.Debug("Successfully Uploaded File: ", handler.Filename, " ; save as ", outPath)
+	surl = filepath.Clean( surl)
+       nail := surl 
+       if bCreate {
+	nail, _ = createThumbnail(outPath)
+	}
+logs.Debug("Successfully Uploaded File: ", handler.Filename, " ; save as ", outPath)
 	return surl, nail, true
 }
 
@@ -281,7 +302,7 @@ func peerSync(fn string) {
 		}
 	}
 	if !ok {
-		logs.Debug("fail to peerSync:", fn)
+		logs.Debug("fail to peerSync:", fn, "; server queues =", LNode.Queues )
 	}
 }
 
@@ -521,8 +542,8 @@ func getFileByDatePath(inode, dPath string) (error, string) {
 }
 
 func JobWatch(ctx context.Context, iT int) {
-	if iT < 60 {
-		iT = 60
+	if iT < 60*5 {
+		iT = 60*5
 	}
 	for {
 		select {
@@ -624,8 +645,8 @@ func LfsStatQuantityIncr() {
 func createThumbnail(fn string) (string, error) {
 	fws := path.Base(fn) //获取文件名带后缀
 	fex := path.Ext(fws) //获取文件后缀
-	fex = strings.ToLower(fex)
-	if fex != ".png" && fex != ".gif" && fex != ".jpg" && fex != ".jpeg" {
+	fex1 := strings.ToLower(fex)
+	if fex1 != ".png" && fex1 != ".gif" && fex1 != ".jpg" && fex1 != ".jpeg" {
 		return "", fmt.Errorf("error file type")
 	}
 	file, err := os.Open(fn)
@@ -653,7 +674,7 @@ func createThumbnail(fn string) (string, error) {
 	}
 	defer out.Close()
 	// write new image to file
-	switch fex {
+	switch fex1 {
 	case ".gif":
 		gif.Encode(out, m, nil)
 	case ".jpeg":
@@ -666,5 +687,4 @@ func createThumbnail(fn string) (string, error) {
 
 	surl := strings.Replace(nailName, LNode.Parent, "", 1)
 	return surl, nil
-
 }

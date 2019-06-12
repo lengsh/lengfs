@@ -1,6 +1,6 @@
 {{ template "header" . }}
 <div align=center>
-<h1>Hello,lengfs!</h1>
+<h1>Hello,{{UserName}}!</h1>
 </div>
 <div style="position:relative;left:100px;top:10px">
 Parent = {{.Node.Parent}}<BR>

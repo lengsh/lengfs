@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	//"net"
-	"errors"
+//	"errors"
 	"flag"
 	"fmt"
 	"github.com/astaxie/beego/logs"
@@ -16,7 +16,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"strings"
+//	"strings"
 	"syscall"
 	"time"
 )
@@ -53,6 +53,7 @@ func runInit() {
 	lfs.LNode.Domain = "lengsh"
 	lfs.LNode.Queues = *queues
 	utils.ServerConfig.WebDir = cdir // "./"
+        utils.ServerConfig.PassSalt = "xrjoN1qR"
 
 	/*
 	   	lfs.LNode.Parent = "./static"
@@ -76,15 +77,8 @@ func getCurrentPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	i := strings.LastIndex(path, "/")
-	/*
-	   if i < 0 {
-	   		i = strings.LastIndex(path, "\\")
-	   	} */
-	if i < 0 {
-		return "", errors.New(`error: Can't find "/" or "\".`)
-	}
-	return string(path[0 : i+1]), nil
+	d,_ := filepath.Split(path)
+	return d,nil
 }
 
 func main() {

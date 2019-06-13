@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/astaxie/beego/logs"
 	"github.com/lengsh/findme/utils"
-	"github.com/nfnt/resize"
+"github.com/nfnt/resize"
 	"image"
 	"image/gif"
 	"image/jpeg"
@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 )
+
 
 const LFS_PATH_SEPARATOR = string(os.PathSeparator)
 const LFS_FILENAMESEPARATOR = "\001\002<BR>"
@@ -46,12 +47,14 @@ const LFS_SYNC_PathInfoValue = "Yes"
 //
 
 type Node struct {
-	Parent string /*    "static"     */
-	Pnode  string /*    "lengfs"     */
-	Inode  string /*    "0"          */
-	Date   string /*    "20190501"   */
-	Domain string /*    "lengsh"     */
-	Queues string /*    "localhost:8081;localhost:8080"    */
+	Port      int
+	UrlSecret bool
+	Parent    string
+	Pnode     string
+	Inode     string
+	Date      string
+	Domain    string
+	Queues    string
 }
 
 type lfsStat struct {
@@ -63,12 +66,13 @@ type lfsStat struct {
 	Lock         sync.RWMutex
 }
 
-var LNode = Node{}
+var LNode = Node{UrlSecret: false, Inode: "0", Parent: "/var/", Pnode: "lengfs", Domain: "lengsh", Queues: "", Port: 8080, Date: time.Now().UTC().Add(8 * time.Hour).Format("20060102")}
 var LfsStat = lfsStat{IsRunning: false, StartTime: time.Now().UTC().Add(8 * time.Hour), ModTime: time.Now().UTC().Add(8 * time.Hour), Quantity: 0}
 
 func (r Node) String() string {
-	return fmt.Sprintf("Parent=%s;\nPnode=%s;\nInode=%s;\nDate=%s;\nDomain=%s;\nQueues=%s;", r.Parent, r.Pnode, r.Inode, r.Date, r.Domain, r.Queues)
+	return fmt.Sprintf("Parent=%s;\nPnode=%s;\nInode=%s;\nDate=%s;\nDomain=%s;\nPort=%d;\nUrlSecret=%v;\nQueues=%s;", r.Parent, r.Pnode, r.Inode, r.Date, r.Domain, r.Port, r.UrlSecret, r.Queues)
 }
+
 
 func (node Node) UserUploadFile(r *http.Request) (string, string, bool) {
 	r.ParseMultipartForm(10 << 20)
@@ -77,10 +81,10 @@ func (node Node) UserUploadFile(r *http.Request) (string, string, bool) {
 		logs.Debug("No Permiss: scrumb is error!....  ", AUTH_SCRUMB_KEY, " = ", scrumb)
 		return "", "", false
 	}
-       node.Date = time.Now().UTC().Add(8*time.Hour).Format("20060102")
-	if fn,nail, ok := saveFile2Node(r, node, true); ok {
-		go peerSync(LNode.Parent+nail)
-		go peerSync(LNode.Parent+fn)
+	node.Date = time.Now().UTC().Add(8 * time.Hour).Format("20060102")
+	if fn, nail, ok := saveFile2Node(r, node, true); ok {
+		go peerSync(LNode.Parent + nail)
+		go peerSync(LNode.Parent + fn)
 		return fn, nail, ok
 	}
 	return "", "", false
@@ -105,17 +109,23 @@ func (node Node) PeerUploadFile(r *http.Request) (string, string, bool) {
 	return "", "", false
 }
 
-func PeerSyncFile( fname string)  {
-  // fname == "/lengfs/0/20190611/abc.jpeg"
-  //   node.Date = time.Now().UTC().Add(8*time.Hour).Format("20060102")
-    // 
-    logs.Debug(LNode.Parent + fname)
-    peerSync(LNode.Parent+fname)
+func PeerSyncFile(fname string) {
+	// fname == "/lengfs/0/20190611/abc.jpeg"
+	//   node.Date = time.Now().UTC().Add(8*time.Hour).Format("20060102")
+	//
+	logs.Debug(LNode.Parent + fname)
+	peerSync(LNode.Parent + fname)
 }
 
-func NotifyLfs2Sync(svr string, fname string)  {
-logs.Debug(svr+ "/lfs/psync/?"+LFS_POST_FileNameKey+"="+fname + "&"+AUTH_SCRUMB_KEY+"="+utils.CreateScrumb())
-resp, err := http.Get( svr+"/lfs/psync/?"+LFS_POST_FileNameKey+"="+fname + "&"+AUTH_SCRUMB_KEY+"="+utils.CreateScrumb())
+func NotifyLfsSync(fname string) {
+       svr := fmt.Sprintf("http://localhost:%d", LNode.Port)
+       NotifyLfs2Sync(svr, fname)
+}
+
+func NotifyLfs2Sync(svr string, fname string) {
+	req := svr + "/lfs/psync/?" + LFS_POST_FileNameKey + "=" + fname + "&" + AUTH_SCRUMB_KEY + "=" + utils.CreateScrumb()
+	logs.Debug(req)
+	resp, err := http.Get( req )
 	if err != nil {
 		logs.Debug(err)
 	}
@@ -135,7 +145,7 @@ func (node Node) SyncPathFile(fn string) error { //    w http.ResponseWriter, r 
 	return fmt.Errorf("something is wrong!")
 }
 
-func (node Node) PathInfo(fdate, inode string) (string,error) {
+func (node Node) PathInfo(fdate, inode string) (string, error) {
 	//      w http.ResponseWriter, r *http.Request) {
 	logs.Debug("PathInfo  date = ", fdate)
 	logs.Debug("PathInfo by inode = ", inode, "; current server's Inode=", LNode.Inode)
@@ -145,9 +155,9 @@ func (node Node) PathInfo(fdate, inode string) (string,error) {
 		//  w.WriteHeader(http.StatusInternalServerError)
 		//	return
 		rest = err.Error()
-		return rest,err
+		return rest, err
 	}
-	return rest,nil
+	return rest, nil
 }
 
 func saveFile2Node(r *http.Request, node Node, bCreate bool) (string, string, bool) {
@@ -203,12 +213,12 @@ func saveFile2Node(r *http.Request, node Node, bCreate bool) (string, string, bo
 		return "", "", false
 	}
 	surl := strings.Replace(outPath, node.Parent, "", 1)
-	surl = filepath.Clean( surl)
-       nail := surl 
-       if bCreate {
-	nail, _ = createThumbnail(outPath)
+	surl = filepath.Clean(surl)
+	nail := surl
+	if bCreate {
+		nail, _ = createThumbnail(outPath)
 	}
-logs.Debug("Successfully Uploaded File: ", handler.Filename, " ; save as ", outPath)
+	logs.Debug("Successfully Uploaded File: ", handler.Filename, " ; save as ", outPath)
 	return surl, nail, true
 }
 
@@ -292,8 +302,8 @@ func isExists(path string)  error {
 */
 
 func peerSync(fn string) {
-       logs.Debug("try to peerSync file = ",fn)
-        slist := strings.Split(LNode.Queues, ";")
+	logs.Debug("try to peerSync file = ", fn)
+	slist := strings.Split(LNode.Queues, ";")
 	ok := true
 	for _, v := range slist {
 		logs.Debug("peerSync to ", v, ": ", fn)
@@ -302,7 +312,7 @@ func peerSync(fn string) {
 		}
 	}
 	if !ok {
-		logs.Debug("fail to peerSync:", fn, "; server queues =", LNode.Queues )
+		logs.Debug("fail to peerSync:", fn, "; server queues =", LNode.Queues)
 	}
 }
 
@@ -503,9 +513,9 @@ func getFileByDatePath(inode, dPath string) (error, string) {
 		return fmt.Errorf("data Path is error"), ""
 	}
 	dirPath := LNode.Parent + PthSep + LNode.Pnode + PthSep + inode + PthSep + dPath
-        logs.Debug("get  date_path (dir files) = ", dirPath)
-        dirPath = filepath.Clean(dirPath)
-        logs.Debug("filepath.Clean (dirPath) = ", dirPath)
+	logs.Debug("get  date_path (dir files) = ", dirPath)
+	dirPath = filepath.Clean(dirPath)
+	logs.Debug("filepath.Clean (dirPath) = ", dirPath)
 	dir, err := ioutil.ReadDir(dirPath)
 	if err != nil {
 		return err, ""
@@ -543,7 +553,7 @@ func getFileByDatePath(inode, dPath string) (error, string) {
 
 func JobWatch(ctx context.Context, iT int) {
 	if iT < 60*5 {
-		iT = 60*5
+		iT = 60 * 5
 	}
 	for {
 		select {

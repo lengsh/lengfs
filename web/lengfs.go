@@ -7,8 +7,8 @@ import (
 	"github.com/lengsh/findme/utils"
 	"github.com/lengsh/lengfs/lfs"
 	"html/template"
-//	"net/url"
-"net/http"
+	//	"net/url"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,9 +32,25 @@ func lfs_router_register() {
 		logs.Error(err)
 		panic(err)
 	}
-	lfsDir := lfs.LNode.Parent + lengfs
+	lfsDir := filepath.Clean(lfs.LNode.Parent + pathSep + lengfs)
 	fmt.Println("fs path:", lfsDir, "  --> http file dir locate !")
-	http.Handle(lengfs, http.StripPrefix(lengfs, http.FileServer(http.Dir(lfsDir))))
+	if !lfs.LNode.UrlSecret {
+		http.Handle(lengfs, http.StripPrefix(lengfs, http.FileServer(http.Dir(lfsDir))))
+	} else {
+		http.HandleFunc(lengfs, func(w http.ResponseWriter, r *http.Request) {
+			r.ParseForm()
+			sec := r.FormValue(lfs.AUTH_SCRUMB_KEY)
+			if utils.CheckScrumb(sec) {
+				file := filepath.Clean(lfsDir + pathSep +  r.URL.Path[len(lengfs):])
+				//  "/Users/lengss/go/src/github.com/lengsh/findme/test.go"
+				fmt.Println("locate file = ", file)
+				http.ServeFile(w, r, file) // r.URL.Path[1:])
+			} else {
+				write2WebPage(w, "No Permission!!")
+			}
+		})
+	}
+
 	/*****
 	  lfs web command
 	  ******/
@@ -62,7 +78,7 @@ func getTemplate(view string, r *http.Request) (*template.Template, error) {
 	}
 	return template.New(view).Funcs(template.FuncMap{
 		"UserName": func() template.HTML {
-			return template.HTML( user.UserName(r))
+			return template.HTML(user.UserName(r))
 		},
 		"Scrumb": func() template.HTML {
 			return template.HTML(utils.CreateScrumb())
@@ -129,12 +145,12 @@ func upload(w http.ResponseWriter, r *http.Request) {
 			logs.Debug("fail to upload file")
 		}
 
-        if gotos := r.FormValue("goto"); len(gotos) > 0 { // has goto url
-      v := r.PostForm
-        v.Set("original", data.Original)
-        v.Set( lfs.AUTH_SCRUMB_KEY, utils.CreateScrumb())
-       //  v.Set("tips", tips)
-			gourl := gotos + "?"+ v.Encode()
+		if gotos := r.FormValue("goto"); len(gotos) > 0 { // has goto url
+			v := r.PostForm
+			v.Set("original", data.Original)
+			v.Set(lfs.AUTH_SCRUMB_KEY, utils.CreateScrumb())
+			//  v.Set("tips", tips)
+			gourl := gotos + "?" + v.Encode()
 			logs.Debug(gourl)
 			http.Redirect(w, r, gourl, http.StatusFound)
 			return
@@ -157,18 +173,18 @@ func lfsStat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-     r.ParseForm()
-       vf:= r.Form
-      for k,v := range vf {
-        fmt.Println(k,"= ",v)
-      }
+	r.ParseForm()
+	vf := r.Form
+	for k, v := range vf {
+		fmt.Println(k, "= ", v)
+	}
 
-     vf= r.PostForm
-      for k,v := range vf {
-        fmt.Println(k,"= ",v)
-      }
+	vf = r.PostForm
+	for k, v := range vf {
+		fmt.Println(k, "= ", v)
+	}
 
-        data := map[string]interface{}{"Node": lfs.LNode, "Stat": lfs.LfsStat}
+	data := map[string]interface{}{"Node": lfs.LNode, "Stat": lfs.LfsStat}
 	t, er := getTemplate("stat.gtpl", r)
 	if er != nil {
 		logs.Error(er)
@@ -263,9 +279,9 @@ func peerSync(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(fname) > 0 {
 		fmt.Println(fname + "\n Should to do PeerSyncFile ")
-		go  lfs.PeerSyncFile(fname)
+		go lfs.PeerSyncFile(fname)
 	}
-	data := map[string]interface{}{ "File": fname+fpath }
+	data := map[string]interface{}{"File": fname + fpath}
 	t, er := getTemplate("sync.gtpl", r)
 	if er != nil {
 		logs.Error(er)
@@ -306,4 +322,9 @@ func getDatefiles(root string) []imglist {
 	}
 	fmt.Println(files)
 	return files
+}
+
+func write2WebPage(w http.ResponseWriter, view string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(view))
 }

@@ -3,20 +3,20 @@ package main
 import (
 	"context"
 	//"net"
-//	"errors"
 	"flag"
 	"fmt"
 	"github.com/astaxie/beego/logs"
 	"github.com/lengsh/findme/utils"
 	"github.com/lengsh/lengfs/lfs"
-	"github.com/lengsh/lengfs/web"
+ "github.com/lengsh/lengfs/web"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-//	"strings"
+	"strconv"
+	//	"strings"
 	"syscall"
 	"time"
 )
@@ -25,6 +25,7 @@ var ( // main operation modes
 	confFile = flag.String("c", "./local.json", "server configure file.")
 	port     = flag.String("p", "8080", "server listen port.")
 	node     = flag.String("i", "0", "lengfs global node (iNode=0)")
+	sec      = flag.Bool("u", false, "url secret(false)")
 	queues   = flag.String("s", "", "lengfs server queues, such as localhost:8080;localhost:8081")
 	// viewRoot   = flag.String("v", "./view/", "view template root")
 )
@@ -47,13 +48,14 @@ func runInit() {
 	}
 	cdir, _ := getCurrentPath()
 	lfs.LNode.Parent = cdir + "static"
-	//        lfs.LNode.Parent = "/var/tmp/lengfs"
 	lfs.LNode.Pnode = "lengfs"
 	lfs.LNode.Inode = *node
+	lfs.LNode.UrlSecret = *sec
 	lfs.LNode.Domain = "lengsh"
 	lfs.LNode.Queues = *queues
+	lfs.LNode.Port, _ = strconv.Atoi(*port)
 	utils.ServerConfig.WebDir = cdir // "./"
-        utils.ServerConfig.PassSalt = "xrjoN1qR"
+	utils.ServerConfig.PassSalt = "xrjoN1qR"
 
 	/*
 	   	lfs.LNode.Parent = "./static"
@@ -77,8 +79,8 @@ func getCurrentPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	d,_ := filepath.Split(path)
-	return d,nil
+	d, _ := filepath.Split(path)
+	return d, nil
 }
 
 func main() {

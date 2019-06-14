@@ -16,7 +16,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
-	"path"
+"os/exec"
+        "path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -63,6 +64,7 @@ type lfsStat struct {
 	StartTime    time.Time
 	TaskPosition time.Time
 	Quantity     int
+	Used         string
 	Lock         sync.RWMutex
 }
 
@@ -564,6 +566,7 @@ func JobWatch(ctx context.Context, iT int) {
 		case <-time.After(time.Duration(iT) * time.Second):
 			logs.Debug(iT, " Seconds scan jobs ...(", time.Now().Format("2006-01-02 15:04:05"), ")")
 			//if be should to do task ,then do !
+			used := getLengfsUsed()
 			LfsStat.Lock.Lock()
 			if !LfsStat.IsRunning {
 				LfsStat.IsRunning = true
@@ -571,6 +574,7 @@ func JobWatch(ctx context.Context, iT int) {
 			} else {
 				logs.Debug("backgroudSync is running...., exit current times")
 			}
+			LfsStat.Used = used
 			LfsStat.Lock.Unlock()
 		}
 	}
@@ -621,6 +625,20 @@ func GetLfsStatQuantity() int {
 	return i
 }
 
+func GetLfsUsed() string {
+	LfsStat.Lock.RLock()
+	i := LfsStat.Used
+	LfsStat.Lock.RUnlock()
+	return i
+}
+
+func SetLfsUsed() {
+	i := getLengfsUsed()
+        LfsStat.Lock.Lock()
+	LfsStat.Used = i
+	LfsStat.Lock.Unlock()
+}
+
 func GetLfsStatStart() time.Time {
 	LfsStat.Lock.RLock()
 	i := LfsStat.StartTime
@@ -636,9 +654,9 @@ func GetLfsStatModTime() time.Time {
 }
 
 func LfsStatStart() {
-	LfsStat.Lock.RLock()
+	LfsStat.Lock.Lock()
 	LfsStat.StartTime = time.Now().UTC().Add(8 * time.Hour)
-	LfsStat.Lock.RUnlock()
+	LfsStat.Lock.Unlock()
 }
 
 func LfsStatModify() {
@@ -697,4 +715,28 @@ func createThumbnail(fn string) (string, error) {
 
 	surl := strings.Replace(nailName, LNode.Parent, "", 1)
 	return surl, nil
+}
+
+func StatInit(){
+  SetLfsUsed()
+  LfsStatStart()
+  LfsStatModify()
+}
+
+ func getLengfsUsed() string {
+         /*
+            这里测试了一种通过启动了外部进程获得信息的方式，
+         */
+         cmd := fmt.Sprintf("du -sh %s", LNode.Parent)
+         lsCmd := exec.Command("bash", "-c", cmd)
+         lsOut, err := lsCmd.Output()
+         if err != nil {
+                 logs.Error(err.Error())
+                 return "No Data!"
+         } else {
+	         fmt.Println(string(lsOut))
+	         used := strings.Split(string(lsOut),"	")
+		 fmt.Println(used)
+                 return used[0]
+         }
 }

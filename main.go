@@ -25,7 +25,7 @@ var ( // main operation modes
 	confFile = flag.String("c", "./local.json", "server configure file.")
 	port     = flag.String("p", "8080", "server listen port.")
 	node     = flag.String("i", "0", "lengfs global node (iNode=0)")
-	sec      = flag.Bool("u", false, "url secret(false)")
+	sec      = flag.Bool("u", true, "url secret(false)")
 	queues   = flag.String("s", "", "lengfs server queues, such as localhost:8080;localhost:8081")
 	// viewRoot   = flag.String("v", "./view/", "view template root")
 )
@@ -57,17 +57,10 @@ func runInit() {
 	utils.ServerConfig.WebDir = cdir // "./"
 	utils.ServerConfig.PassSalt = "xrjoN1qR"
 
-	/*
-	   	lfs.LNode.Parent = "./static"
-	   	lfs.LNode.Pnode = "lengfs"
-	   	lfs.LNode.Inode = *node
-	   	lfs.LNode.Domain = "lengsh"
-	   	lfs.LNode.Queues = *queues
-	           utils.ServerConfig.WebDir = "/Users/lengss/go/src/github.com/lengsh/lengfs"
-	*/
 	logs.Debug(*queues)
 	os.MkdirAll(lfs.LNode.Parent, 0755)
 	fmt.Println(lfs.LNode)
+	lfs.StatInit()
 }
 
 func getCurrentPath() (string, error) {
@@ -107,7 +100,7 @@ func main() {
 		}
 	}()
 
-	go lfs.JobWatch(ctx, 60)
+	go lfs.JobWatch(ctx, 5*60)
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)

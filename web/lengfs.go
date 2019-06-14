@@ -42,11 +42,9 @@ func lfs_router_register() {
 			sec := r.FormValue(lfs.AUTH_SCRUMB_KEY)
 			if utils.CheckScrumb(sec) {
 				file := filepath.Clean(lfsDir + pathSep +  r.URL.Path[len(lengfs):])
-				//  "/Users/lengss/go/src/github.com/lengsh/findme/test.go"
-				fmt.Println("locate file = ", file)
 				http.ServeFile(w, r, file) // r.URL.Path[1:])
 			} else {
-				write2WebPage(w, "No Permission!!")
+				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			}
 		})
 	}

@@ -61,6 +61,7 @@ func runInit() {
 	os.MkdirAll(lfs.LNode.Parent, 0755)
 	fmt.Println(lfs.LNode)
 	lfs.StatInit()
+        lfs.LfsSetFrequency(600)
 }
 
 func getCurrentPath() (string, error) {
@@ -100,7 +101,7 @@ func main() {
 		}
 	}()
 
-	go lfs.JobWatch(ctx, 5*60)
+	go lfs.JobWatch(ctx)
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)

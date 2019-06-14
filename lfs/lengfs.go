@@ -64,12 +64,13 @@ type lfsStat struct {
 	StartTime    time.Time
 	TaskPosition time.Time
 	Quantity     int
-	Used         string
+        Frequency    int
+        Used         string
 	Lock         sync.RWMutex
 }
 
 var LNode = Node{UrlSecret: false, Inode: "0", Parent: "/var/", Pnode: "lengfs", Domain: "lengsh", Queues: "", Port: 8080, Date: time.Now().UTC().Add(8 * time.Hour).Format("20060102")}
-var LfsStat = lfsStat{IsRunning: false, StartTime: time.Now().UTC().Add(8 * time.Hour), ModTime: time.Now().UTC().Add(8 * time.Hour), Quantity: 0}
+var LfsStat = lfsStat{IsRunning: false, StartTime: time.Now().UTC().Add(8 * time.Hour), ModTime: time.Now().UTC().Add(8 * time.Hour), Quantity: 0, Frequency:600}
 
 func (r Node) String() string {
 	return fmt.Sprintf("Parent=%s;\nPnode=%s;\nInode=%s;\nDate=%s;\nDomain=%s;\nPort=%d;\nUrlSecret=%v;\nQueues=%s;", r.Parent, r.Pnode, r.Inode, r.Date, r.Domain, r.Port, r.UrlSecret, r.Queues)
@@ -553,7 +554,8 @@ func getFileByDatePath(inode, dPath string) (error, string) {
 	return nil, flist
 }
 
-func JobWatch(ctx context.Context, iT int) {
+func JobWatch(ctx context.Context) {
+        iT :=  GetLfsStatFrequency()
 	if iT < 60*5 {
 		iT = 60 * 5
 	}
@@ -668,6 +670,17 @@ func LfsStatQuantityIncr() {
 	LfsStat.Lock.Lock()
 	LfsStat.Quantity++
 	LfsStat.Lock.Unlock()
+}
+func LfsSetFrequency(iFr int) {
+	LfsStat.Lock.Lock()
+	LfsStat.Frequency =  iFr
+	LfsStat.Lock.Unlock()
+}
+func GetLfsStatFrequency() int {
+	LfsStat.Lock.RLock()
+	i := LfsStat.Frequency
+	LfsStat.Lock.RUnlock()
+	return i
 }
 
 func createThumbnail(fn string) (string, error) {

@@ -10,7 +10,7 @@ Server Queues = {{.Node.Queues}}<BR>
 Start = {{DateFormat .Stat.StartTime "2006-01-02 15:04:05"}}<BR>
 Modetime = {{DateFormat .Stat.ModTime "2006-01-02 15:04:05"}}<BR>
 Disk Used = <font color="red">{{.Stat.Used}}</font><BR>
-
+Disk Scan Frequency = {{.Stat.Frequency}}秒<BR>
 <h2>Command</h2>
 <div>
 <a href="/lfs/"></a>
